@@ -1,0 +1,2457 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resolvedor — Cálculo Numérico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --paper: #EDF0EA;
+    --paper-raised: #F7F8F4;
+    --ink: #16233B;
+    --ink-soft: #55607A;
+    --ink-faint: #8892A6;
+    --line: #CDD3C6;
+    --line-soft: #DEE2D8;
+    --brass: #A9721F;
+    --brass-deep: #7E5416;
+    --brass-tint: #F1E3CB;
+    --teal: #276458;
+    --teal-tint: #DCEAE6;
+    --danger: #A5333B;
+    --danger-tint: #F4DEDF;
+    --shadow: rgba(22,35,59,.10);
+    --radius: 3px;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"]{
+    --paper: #10151F;
+    --paper-raised: #171E2B;
+    --ink: #E8EAEE;
+    --ink-soft: #A7AFC2;
+    --ink-faint: #6C7488;
+    --line: #2A3242;
+    --line-soft: #232A38;
+    --brass: #D6A24E;
+    --brass-deep: #EFC97D;
+    --brass-tint: #2C2415;
+    --teal: #5FBBA9;
+    --teal-tint: #142924;
+    --danger: #E28086;
+    --danger-tint: #2B1618;
+    --shadow: rgba(0,0,0,.35);
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --paper: #10151F;
+      --paper-raised: #171E2B;
+      --ink: #E8EAEE;
+      --ink-soft: #A7AFC2;
+      --ink-faint: #6C7488;
+      --line: #2A3242;
+      --line-soft: #232A38;
+      --brass: #D6A24E;
+      --brass-deep: #EFC97D;
+      --brass-tint: #2C2415;
+      --teal: #5FBBA9;
+      --teal-tint: #142924;
+      --danger: #E28086;
+      --danger-tint: #2B1618;
+      color-scheme: dark;
+    }
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0/100% 34px,
+      linear-gradient(90deg, var(--line-soft) 1px, transparent 1px) 0 0/34px 100%,
+      var(--paper);
+    background-attachment: local;
+    color: var(--ink);
+    font-family: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono{ font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .shell{ max-width: 1180px; margin: 0 auto; padding: 12px 28px 60px; }
+
+  header.top{
+    display:flex; align-items:center; justify-content:space-between; gap: 16px;
+    padding-bottom: 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  header.top .mark{ display:flex; align-items:baseline; gap: 10px; }
+  header.top .mark .num{ font-family:"JetBrains Mono"; font-size: 12px; color: var(--brass); letter-spacing: .03em; }
+  h1{
+    font-size: 19px; font-weight: 700; margin: 2px 0 0; letter-spacing: -0.01em;
+  }
+  header.top p{ margin:0; color: var(--ink-soft); font-size: 14px; max-width: 46ch; line-height:1.5; }
+
+  /* Método como abas "coladas" na página — não caixas soltas */
+  .method-switch.method-tabs{
+    display:flex; gap: 4px; margin-bottom: 0; border-bottom: 1px solid var(--line);
+  }
+  .method-opt{
+    display:flex; align-items:center; justify-content:center; gap:7px;
+    flex: 1 1 0; padding: 8px 12px; margin-bottom: -1px;
+    border: none; border-bottom: 2px solid transparent; border-radius: 0;
+    background: transparent; cursor:pointer;
+    color: var(--ink-soft); transition: color .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .method-opt:hover{ color: var(--ink); }
+  .method-opt.active{
+    color: var(--ink); background: var(--paper-raised);
+    border-bottom-color: var(--brass);
+    border-left: 1px solid var(--line); border-right: 1px solid var(--line); border-top: 1px solid var(--line);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding-top: 7px;
+  }
+  .method-opt input{ display:none; }
+  .method-opt .mo-text b{ font-size: 13.5px; font-weight: 600; }
+  .method-opt.active .mo-text b{ font-weight: 700; }
+  .method-opt .mo-text span{ display:block; font-size: 12px; color: var(--ink-soft); margin-top: 2px; line-height:1.4; }
+  @media (max-width: 560px){
+    .method-switch.method-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .method-opt{ padding: 9px 8px; }
+    .method-opt.active{ padding-top: 8px; }
+    .method-opt .mo-text b{ font-size: 11.5px; white-space:nowrap; }
+  }
+  .layout{ margin-top: 10px; display:grid; grid-template-columns: 248px 1fr; gap: 16px; align-items:start; }
+  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } }
+
+  /* Config compacta da matriz, ao lado da grade de números */
+  .matrix-panel-body{ display:flex; gap: 20px; align-items:flex-start; flex-wrap:wrap; }
+  .matrix-config{
+    width: 152px; flex: 0 0 152px; display:flex; flex-direction:column; gap:12px;
+    padding-right: 18px; border-right: 1px solid var(--line-soft);
+  }
+  @media (max-width: 700px){
+    .matrix-config{ width:100%; flex:1 1 100%; border-right:none; border-bottom:1px solid var(--line-soft); padding-right:0; padding-bottom:12px; }
+  }
+  .matrix-config .field-row{ flex-direction:column; align-items:flex-start; gap:5px; margin-bottom:0; }
+  .matrix-config .field-row label{ font-size: 11.5px; }
+  .matrix-config .hint{ margin-top:0; }
+  #jacobiParams{ display:flex; flex-direction:column; gap:12px; }
+  .matrix-editor-wrap{ flex:1; min-width: 0; }
+
+  .panel{
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 1px 2px var(--shadow);
+  }
+  .panel + .panel{ margin-top: 10px; }
+  .panel .panel-head{
+    padding: 8px 14px; border-bottom: 1px solid var(--line-soft);
+    font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--ink-soft);
+  }
+  .panel .panel-body{ padding: 11px 14px; }
+
+  .field-row{ display:flex; align-items:center; justify-content:space-between; gap: 10px; margin-bottom: 12px; }
+  .field-row label{ font-size: 13px; color: var(--ink-soft); }
+  .stepper{ display:flex; align-items:center; border: 1px solid var(--line); border-radius: var(--radius); overflow:hidden; }
+  .stepper button{
+    width: 26px; height: 26px; border:none; background: var(--paper);
+    color: var(--ink); font-size: 15px; cursor:pointer; line-height:1;
+  }
+  .stepper button:hover{ background: var(--brass-tint); color: var(--brass-deep); }
+  .stepper span{ width: 30px; text-align:center; font-family:"JetBrains Mono"; font-size: 13px; }
+
+  .toggle-row{ display:flex; border: 1px solid var(--line); border-radius: var(--radius); overflow:hidden; }
+  .toggle-row button{
+    flex:1; padding: 7px 4px; border:none; background: var(--paper); color: var(--ink-soft);
+    font-family:"JetBrains Mono"; font-size: 12.5px; cursor:pointer; border-right:1px solid var(--line);
+  }
+  .toggle-row button:last-child{ border-right:none; }
+  .toggle-row button.active{ background: var(--brass); color: #fff; }
+
+  input[type="number"].param{
+    width: 66px; padding: 5px 7px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); color: var(--ink); font-family:"JetBrains Mono"; font-size: 13px;
+  }
+
+  input[type="text"].text-field{
+    width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); color: var(--ink); font-family:"JetBrains Mono"; font-size: 13px;
+    box-sizing: border-box;
+  }
+  .stack-field{ margin-bottom: 12px; }
+  .stack-field:last-child{ margin-bottom: 0; }
+  .stack-field label{ display:block; font-size: 12.5px; color: var(--ink-soft); margin-bottom: 5px; }
+  .checkbox-row{ display:flex; align-items:center; gap:9px; }
+  .checkbox-row input{ width:15px; height:15px; accent-color: var(--brass); cursor:pointer; }
+  .checkbox-row label{ font-size: 13px; color: var(--ink); cursor:pointer; }
+  #headerFields{ margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
+
+  .btn{
+    width:100%; padding: 11px 14px; border-radius: var(--radius); border: 1px solid var(--brass-deep);
+    background: var(--brass); color: #fff; font-weight:600; font-size: 13.5px; cursor:pointer;
+    letter-spacing: .01em; transition: filter .15s ease, transform .05s ease;
+  }
+  .btn:hover{ filter: brightness(1.06); }
+  .btn:active{ transform: translateY(1px); }
+  .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+  .btn.ghost{
+    background: transparent; color: var(--ink-soft); border: 1px solid var(--line); font-weight:500;
+  }
+  .btn.ghost:hover{ border-color: var(--ink-soft); color: var(--ink); }
+  .btn.ghost.btn-scilab{
+    background: var(--teal-tint); color: var(--teal); border: 1px solid var(--teal);
+  }
+  .btn.ghost.btn-scilab:hover{ filter: brightness(1.05); border-color: var(--teal); color: var(--teal); }
+  .btn.ghost.btn-scinotes{
+    background: var(--danger-tint); color: var(--danger); border: 1px solid var(--danger);
+  }
+  .btn.ghost.btn-scinotes:hover{ filter: brightness(1.05); border-color: var(--danger); color: var(--danger); }
+  .btn.ghost.btn-scicode{
+    background: var(--brass-tint); color: var(--brass-deep); border: 1px solid var(--brass);
+  }
+  .btn.ghost.btn-scicode:hover{ filter: brightness(1.05); border-color: var(--brass); color: var(--brass-deep); }
+  .btn-row{ display:flex; gap:8px; }
+  .btn-row .btn{ flex:1; }
+
+  /* Modal do código Scilab */
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background: rgba(22,35,59,.45); z-index: 100;
+    align-items:center; justify-content:center; padding: 24px;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: 0 4px 18px var(--shadow); width: 100%; max-width: 720px; max-height: 86vh;
+    display:flex; flex-direction:column;
+  }
+  .modal-head{
+    padding: 14px 18px; border-bottom: 1px solid var(--line-soft); display:flex; align-items:center; justify-content:space-between;
+  }
+  .modal-head h3{ margin:0; font-size:14.5px; }
+  .modal-close{
+    border:none; background:transparent; color: var(--ink-soft); font-size: 20px; line-height:1; cursor:pointer; padding:2px 6px;
+  }
+  .modal-close:hover{ color: var(--ink); }
+  .modal-body{ padding: 14px 18px; overflow:auto; }
+  .modal-body .hint{ margin-bottom:8px; }
+  #scilabCodeArea{
+    width:100%; min-height: 320px; resize: vertical; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); color: var(--ink); font-family:"JetBrains Mono"; font-size: 12.5px; line-height:1.5;
+    padding: 10px; box-sizing: border-box; white-space: pre; overflow:auto;
+  }
+  .modal-actions{ display:flex; gap:8px; padding: 12px 18px 16px; border-top: 1px solid var(--line-soft); }
+  .modal-actions .btn{ flex:1; }
+
+  .hint{ font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; line-height:1.4; }
+
+  /* Matrix editor */
+  .matrix-editor{ overflow-x:auto; padding-bottom: 4px; }
+  .matrix-row{ display:flex; align-items:center; gap: 8px; }
+  .matrix-grid{ display:inline-grid; gap: 6px; }
+  .cell-wrap{ position:relative; }
+  .cell-wrap.aug::before{
+    content:""; position:absolute; left:-7px; top:2px; bottom:2px; width:1px; background: var(--brass);
+  }
+  input.cell{
+    width: 62px; height: 40px; text-align:center; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); color: var(--ink); font-family:"JetBrains Mono"; font-size: 14px;
+  }
+  input.cell:focus{ outline:none; border-color: var(--brass); box-shadow: 0 0 0 2px var(--brass-tint); }
+  .b-col{ display:flex; flex-direction:column; gap:6px; margin-left: 14px; padding-left: 14px; border-left: 1px dashed var(--line); }
+  .b-col .b-label{ font-family:"JetBrains Mono"; font-size: 11px; color: var(--ink-faint); margin-bottom: 2px; }
+  input.bcell{
+    width: 62px; height: 40px; text-align:center; border: 1px solid var(--teal); border-radius: var(--radius);
+    background: var(--teal-tint); color: var(--ink); font-family:"JetBrains Mono"; font-size: 14px;
+  }
+  .matrix-caption{ font-size: 11.5px; color: var(--ink-faint); margin-top: 10px; }
+
+  /* Steps / preview */
+  .step-list{ display:flex; flex-direction:column; gap: 14px; }
+  .step{
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+    overflow:hidden;
+  }
+  .step-top{ display:flex; align-items:center; gap:10px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); }
+  .step-idx{
+    font-family:"JetBrains Mono"; font-size: 11px; color: var(--ink-faint); min-width: 26px;
+  }
+  .step-chip{
+    font-family:"JetBrains Mono"; font-size: 10.5px; letter-spacing:.03em; padding: 2px 7px; border-radius: 20px;
+    color:#fff; text-transform:uppercase;
+  }
+  .chip-init{ background: var(--ink-soft); }
+  .chip-swap{ background: var(--danger); }
+  .chip-norm{ background: var(--brass); }
+  .chip-elim{ background: var(--teal); }
+  .chip-skip{ background: var(--ink-faint); }
+  .chip-final{ background: var(--teal); }
+  .step-desc{ font-size: 13px; color: var(--ink); }
+  .step-body{ padding: 12px; }
+  table.mtx{ border-collapse: collapse; font-family:"JetBrains Mono"; font-size: 13px; }
+  table.mtx td{
+    padding: 6px 11px; text-align:center; border: 1px solid var(--line-soft); min-width: 20px;
+  }
+  table.mtx td.pivot{ background: var(--brass-tint); color: var(--brass-deep); font-weight:700; }
+  table.mtx td.rowhi{ background: var(--teal-tint); }
+  table.mtx td.aug-sep{ border-left: 2px solid var(--brass); }
+
+  .final-box{
+    margin-top: 16px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--teal);
+    background: var(--teal-tint);
+  }
+  .final-box h3{ margin:0 0 8px; font-size: 13px; color: var(--teal); letter-spacing:.02em; }
+  .final-vals{ display:flex; flex-wrap:wrap; gap: 10px; }
+  .final-vals span{
+    font-family:"JetBrains Mono"; font-size: 14px; background: var(--paper-raised); border: 1px solid var(--line);
+    padding: 5px 10px; border-radius: var(--radius);
+  }
+
+  .empty-state{ padding: 36px 16px; text-align:center; color: var(--ink-faint); font-size: 13.5px; }
+
+  .iter-table-wrap{ overflow-x:auto; margin-top: 10px; }
+  table.iter{ border-collapse: collapse; font-family:"JetBrains Mono"; font-size: 12.5px; width:100%; }
+  table.iter th, table.iter td{ padding: 6px 10px; border: 1px solid var(--line-soft); text-align:right; white-space:nowrap; }
+  table.iter th{ background: var(--paper); color: var(--ink-soft); font-weight:600; }
+  table.iter td:first-child, table.iter th:first-child{ text-align:left; color: var(--ink-soft); }
+
+  footer.foot{ margin-top: 34px; text-align:center; color: var(--ink-faint); font-size: 11.5px; }
+
+  ::selection{ background: var(--brass-tint); }
+  a{ color: var(--brass-deep); }
+
+  @media (max-width: 480px){
+    .shell{ padding: 24px 14px 70px; }
+    input.cell, input.bcell{ width: 50px; height: 36px; font-size: 12.5px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header class="top">
+    <div>
+      <div class="mark"><span class="num">CN·01</span></div>
+      <h1>Resolvedor de Sistemas — Cálculo Numérico</h1>
+    </div>
+  </header>
+
+  <div class="method-switch method-tabs" id="methodSwitch">
+    <label class="method-opt active" data-method="gauss">
+      <input type="radio" name="method" value="gauss" checked>
+      <span class="mo-text"><b>Escalonamento</b></span>
+    </label>
+    <label class="method-opt" data-method="jacobi">
+      <input type="radio" name="method" value="jacobi">
+      <span class="mo-text"><b>Método de Jacobi</b></span>
+    </label>
+    <label class="method-opt" data-method="lu">
+      <input type="radio" name="method" value="lu">
+      <span class="mo-text"><b>Fatoração LU</b></span>
+    </label>
+  </div>
+
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="panel" id="imgPanel">
+        <div class="panel-head">LER DE UM PRINT <span style="font-weight:400; color:var(--ink-faint); text-transform:none;">(ou cole com Ctrl+V)</span></div>
+        <div class="panel-body">
+          <input type="file" id="ocrInput" accept="image/*" style="display:none;">
+          <button class="btn ghost" id="btnOcr" type="button">🔎 Ler com OCR (funciona no arquivo baixado)</button>
+          <div class="hint" id="ocrHint"></div>
+
+          <div id="aiImgRow" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line);">
+            <input type="file" id="imgInput" accept="image/*" style="display:none;">
+            <button class="btn ghost" id="btnImage" type="button">📷 Ler com IA (mais precisa)</button>
+            <div class="hint" id="imgHint">Só funciona dentro deste link publicado (não no arquivo baixado), mas costuma acertar até em foto de caderno.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="headerPanel">
+        <div class="panel-head">CABEÇALHO DO PDF</div>
+        <div class="panel-body">
+          <div class="stack-field">
+            <label for="headerQuestion">Questão (título do PDF)</label>
+            <input type="text" class="text-field" id="headerQuestion" placeholder="1, 1 A, 1 b...">
+          </div>
+          <div class="checkbox-row" style="margin-top:14px;">
+            <input type="checkbox" id="chkHeader">
+            <label for="chkHeader">Incluir identificação (estilo cabeçalho do IFMG)</label>
+          </div>
+          <div id="headerFields" style="display:none;">
+            <div class="stack-field">
+              <label for="headerName">Nome do aluno</label>
+              <input type="text" class="text-field" id="headerName" placeholder="Insira seu nome">
+            </div>
+          </div>
+          <div class="hint">Se for gerar várias questões seguidas, deixe a identificação marcada só na primeira e desmarque nas próximas.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-body">
+          <div class="btn-row" style="margin-bottom:8px;">
+            <button class="btn ghost" id="btnExample" type="button">Carregar exemplo</button>
+            <button class="btn ghost" id="btnClear" type="button">Limpar</button>
+          </div>
+          <div class="btn-row" style="margin-bottom:8px;">
+            <button class="btn ghost btn-scilab" id="btnPdfScilab" type="button" disabled title="Impressão no estilo do console do Scilab">Versão Scilab</button>
+            <button class="btn ghost btn-scinotes" id="btnPdfScinotes" type="button" disabled title="Impressão com numeração de linhas, no estilo do SciNotes">SciNotes</button>
+          </div>
+          <div class="btn-row" style="margin-bottom:8px;">
+            <button class="btn ghost btn-scicode" id="btnScilabCode" type="button" disabled title="Gera um script .sce de verdade, pra colar e rodar no Scilab">Código Scilab (.sce)</button>
+          </div>
+          <div class="hint" id="pdfHint">Preencha a matriz para habilitar o download.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+      <div class="panel">
+        <div class="panel-head" id="matrixHead">MATRIZ AUMENTADA [A | b]</div>
+        <div class="panel-body matrix-panel-body">
+          <div class="matrix-config" id="dimsPanel">
+            <div class="field-row" id="rowsField">
+              <label id="rowsLabel">Linhas</label>
+              <div class="stepper">
+                <button type="button" data-act="rows-" aria-label="diminuir linhas">−</button>
+                <span id="rowsVal">4</span>
+                <button type="button" data-act="rows+" aria-label="aumentar linhas">+</button>
+              </div>
+            </div>
+            <div class="field-row" id="colsField">
+              <label id="colsLabel">Colunas</label>
+              <div class="stepper">
+                <button type="button" data-act="cols-" aria-label="diminuir colunas">−</button>
+                <span id="colsVal">3</span>
+                <button type="button" data-act="cols+" aria-label="aumentar colunas">+</button>
+              </div>
+            </div>
+            <div class="hint" id="dimsHint">A última coluna é o vetor b.</div>
+
+            <div id="jacobiParams" style="display:none;">
+              <div class="field-row">
+                <label>Chute inicial (x₀)</label>
+                <div class="toggle-row" id="inicioToggle">
+                  <button type="button" data-v="0" class="active">0</button>
+                  <button type="button" data-v="1">1</button>
+                </div>
+              </div>
+              <div class="field-row" style="flex-direction:column;gap:6px;">
+                <label>Critério de parada</label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;">
+                  <input type="radio" name="stopMode" value="iter" id="stopIter" checked> Número de iterações
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;">
+                  <input type="radio" name="stopMode" value="tol" id="stopTol"> Tolerância
+                </label>
+              </div>
+              <div class="field-row" id="fieldNumIter">
+                <label>Iterações</label>
+                <input type="number" class="param" id="numIter" value="10" min="1" max="200" style="width:100%;">
+              </div>
+              <div class="field-row" id="fieldTolerance" style="display:none;">
+                <label>Tolerância</label>
+                <input type="number" class="param" id="tolInput" value="0.001" min="1e-15" step="any" style="width:100%;">
+              </div>
+            </div>
+          </div>
+
+          <div class="matrix-editor-wrap">
+            <div class="matrix-editor" id="matrixEditor"></div>
+            <div class="matrix-caption" id="matrixCaption"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head" id="stepsHead">PASSO A PASSO</div>
+        <div class="panel-body" id="stepsBody">
+          <div class="empty-state">Preencha a matriz ao lado para ver os passos aparecerem aqui.</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <footer class="foot">Cálculo feito no navegador · o mesmo passo a passo é usado para gerar o PDF</footer>
+</div>
+
+<div class="modal-overlay" id="scilabModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Código Scilab (.sce)</h3>
+      <button class="modal-close" id="scilabModalClose" type="button" aria-label="fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" id="scilabCodeHint">Script gerado a partir da matriz atual — só usa funções nativas do Scilab, sem nenhuma toolbox extra. Cole no SciNotes e rode com F5 (ou selecione tudo e mande executar).</div>
+      <textarea id="scilabCodeArea" readonly spellcheck="false"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btnScilabCopy" type="button">Copiar código</button>
+      <button class="btn" id="btnScilabDownload" type="button">Baixar .sce</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- state ----------
+  var state = {
+    method: "gauss",
+    rows: 4, cols: 3,     // gauss: rows x (cols+1) augmented
+    jn: 3,                // jacobi: n x n
+    A: [], b: [],
+    inicio: 0, numIter: 10, stopMode: "iter", tolerance: 0.001,
+    headerOn: false, headerName: "", headerQuestion: ""
+  };
+
+  function mk(rows, cols, fill){
+    var out = [];
+    for (var i=0;i<rows;i++){ var r=[]; for (var j=0;j<cols;j++) r.push(fill); out.push(r); }
+    return out;
+  }
+
+  function resizeGauss(){
+    var r = state.rows, c = state.cols; // c unknowns + 1 (b) = c+1 columns
+    var newA = mk(r, c+1, 0);
+    for (var i=0;i<r;i++) for (var j=0;j<c+1;j++){
+      if (state.A[i] && state.A[i][j] !== undefined) newA[i][j] = state.A[i][j];
+    }
+    state.A = newA;
+  }
+  function resizeJacobi(){
+    var n = state.jn;
+    var newA = mk(n, n, 0);
+    var newB = [];
+    for (var i=0;i<n;i++){
+      for (var j=0;j<n;j++){ if (state.A[i] && state.A[i][j] !== undefined) newA[i][j] = state.A[i][j]; }
+      newB.push(state.b[i] !== undefined ? state.b[i] : 0);
+    }
+    state.A = newA; state.b = newB;
+  }
+
+  function fmt(x){
+    if (!isFinite(x)) return "—";
+    var r = Math.round(x*10000)/10000;
+    if (Object.is(r, -0)) r = 0;
+    return r.toString();
+  }
+
+  // casas decimais para modo tolerância: p + 2 onde p = ceil(-log10(tol)), mínimo 4
+  function tolCasas(tol){
+    return tol > 0 ? Math.max(4, Math.ceil(-Math.log10(tol)) + 2) : 4;
+  }
+  function fmtTol(x, tol){
+    if (!isFinite(x)) return "—";
+    var casas = tolCasas(tol);
+    var factor = Math.pow(10, casas);
+    var r = Math.round(x * factor) / factor;
+    if (Object.is(r, -0)) r = 0;
+    return r.toFixed(casas);
+  }
+
+  // ---------- persistence (per-viewer convenience only) ----------
+  function saveLocal(){
+    try{
+      localStorage.setItem("cn_state", JSON.stringify(state));
+    }catch(e){ /* storage unavailable — ignore */ }
+  }
+  function loadLocal(){
+    try{
+      var raw = localStorage.getItem("cn_state");
+      if (!raw) return false;
+      var parsed = JSON.parse(raw);
+      Object.assign(state, parsed);
+      return true;
+    }catch(e){ return false; }
+  }
+
+  // ---------- algorithms ----------
+  function clone(m){ return m.map(function(r){ return r.slice(); }); }
+
+  // números dentro de uma descrição de operação: parênteses só quando é negativo
+  function num(v){ var s = fmt(v); return v < 0 ? "("+s+")" : s; }
+
+  // L2 -> L2 / 2   (sem parênteses quando positivo)
+  function normDesc(linha, valor){
+    return "L"+linha+" → L"+linha+" ÷ "+num(valor);
+  }
+  // L2 -> L2 - (-1)L1  vira  L2 -> L2 + L1
+  function elimDesc(alvo, c, pivo){
+    var sinal = c < 0 ? "+" : "−";
+    var a = Math.abs(c);
+    var mult = Math.abs(a - 1) < 1e-9 ? "" : fmt(a)+"·";
+    return "L"+alvo+" → L"+alvo+" "+sinal+" "+mult+"L"+pivo;
+  }
+
+  function gaussJordanSteps(A0){
+    var A = clone(A0);
+    var n = A.length, m = A[0].length;
+    var steps = [];
+    steps.push({type:"init", title:"Matriz inicial", desc:"Matriz aumentada [A | b] fornecida.", matrix: clone(A)});
+    var linha = 0;
+    for (var coluna=0; coluna<m-1; coluna++){
+      var p = -1;
+      for (var i=linha;i<n;i++){ if (Math.abs(A[i][coluna]) > 1e-9){ p=i; break; } }
+      if (p === -1){
+        steps.push({type:"skip", title:"Coluna "+(coluna+1)+" nula", desc:"Nenhum pivô possível na coluna "+(coluna+1)+" a partir da linha "+(linha+1)+" — coluna ignorada.", matrix: clone(A)});
+        continue;
+      }
+      if (p !== linha){
+        var tmp = A[linha]; A[linha] = A[p]; A[p] = tmp;
+        steps.push({type:"swap", title:"Troca de linhas", desc:"L"+(linha+1)+" ↔ L"+(p+1), matrix: clone(A), hiRows:[linha,p], rawA:linha+1, rawB:p+1});
+      }
+      var valor = A[linha][coluna];
+      if (Math.abs(valor - 1) > 1e-9){
+        A[linha] = A[linha].map(function(v){ return v/valor; });
+        steps.push({type:"norm", title:"Normalização", desc:normDesc(linha+1, valor), matrix: clone(A), hiRows:[linha], pivotRow:linha, pivotCol:coluna, rawLine:linha+1, rawValue:valor});
+      }
+      for (var ii=0; ii<n; ii++){
+        if (ii !== linha){
+          var c = A[ii][coluna];
+          if (Math.abs(c) > 1e-9){
+            (function(ii, c, linhaFixed){
+              A[ii] = A[ii].map(function(v, j){ return v - c*A[linhaFixed][j]; });
+            })(ii, c, linha);
+            steps.push({type:"elim", title:"Eliminação", desc:elimDesc(ii+1, c, linha+1), matrix: clone(A), hiRows:[ii,linha], pivotCol:coluna, rawTarget:ii+1, rawPivot:linha+1, rawCoef:c});
+          }
+        }
+      }
+      linha++;
+      if (linha >= n) break;
+    }
+    steps.push({type:"final", title:"Resultado", desc:"Forma escalonada reduzida (RREF) da matriz aumentada.", matrix: clone(A)});
+    return steps;
+  }
+
+  function jacobiRun(A, b, inicio, numIter, stopMode, tolerance){
+    var n = A.length;
+    var x = []; for (var i=0;i<n;i++) x.push(inicio);
+    var historico = [x.slice()];
+    var iterations = [];
+    var convergedAt = null;
+    var maxK = stopMode === "tol" ? 1000 : numIter;
+    for (var k=0; k<maxK; k++){
+      var X = new Array(n).fill(0);
+      var detail = [];
+      for (var ri=0; ri<n; ri++){
+        var soma = 0; var terms = [];
+        for (var j=0;j<n;j++){ if (j!==ri){ soma += A[ri][j]*x[j]; terms.push({coef:A[ri][j], val:x[j]}); } }
+        var aii = A[ri][ri];
+        var val = (b[ri]-soma)/aii;
+        X[ri] = val;
+        detail.push({i:ri, terms:terms, bi:b[ri], aii:aii, result:val});
+      }
+      // erro máximo entre iterações
+      var err = 0;
+      for (var ei=0; ei<n; ei++) err = Math.max(err, Math.abs(X[ei] - x[ei]));
+      x = X;
+      historico.push(x.slice());
+      iterations.push({k:k, detail:detail, x:x.slice(), err:err});
+      if (stopMode === "tol" && err <= tolerance){
+        convergedAt = k;
+        break;
+      }
+    }
+    return {iterations:iterations, historico:historico, n:n, convergedAt:convergedAt, stopMode:stopMode, tolerance:tolerance};
+  }
+
+  function jacobiFormula(d){
+    var s = "x"+(d.i+1)+" = ("+fmt(d.bi);
+    d.terms.forEach(function(t){
+      if (t.coef >= 0) s += " − "+fmt(t.coef)+"("+fmt(t.val)+")";
+      else s += " + "+fmt(-t.coef)+"("+fmt(t.val)+")";
+    });
+    s += ") ÷ "+num(d.aii)+"   =   "+fmt(d.result);
+    return s;
+  }
+
+  // ---------- fatoração LU (Doolittle, sem troca de linhas) ----------
+  function luSteps(A0, b0){
+    var A = clone(A0);
+    var n = A.length;
+    var b = b0.slice();
+    var L = mk(n, n, 0);
+    for (var d=0; d<n; d++) L[d][d] = 1;
+    var etapas = [];
+    var falhou = null;
+
+    for (var k=0; k<n-1; k++){
+      var pivo = A[k][k];
+      if (Math.abs(pivo) < 1e-12){
+        falhou = "O pivô a"+(k+1)+(k+1)+" ficou igual a zero — a fatoração LU sem troca de linhas não é possível para esta matriz.";
+        break;
+      }
+      var mults = [];
+      for (var i=k+1; i<n; i++){
+        var m = A[i][k] / pivo;
+        L[i][k] = m;
+        for (var j=k; j<n; j++) A[i][j] = A[i][j] - m*A[k][j];
+        A[i][k] = 0;
+        mults.push({i:i+1, k:k+1, m:m});
+      }
+      etapas.push({k:k+1, pivo:pivo, mults:mults, matrix: clone(A)});
+    }
+
+    var U = clone(A);
+
+    // L·y = b  (substituição para frente)
+    var y = new Array(n).fill(0);
+    var yDetail = [];
+    for (var r=0; r<n; r++){
+      var soma = 0, termos = [];
+      for (var c=0; c<r; c++){ soma += L[r][c]*y[c]; termos.push({coef:L[r][c], val:y[c], idx:c+1}); }
+      y[r] = b[r] - soma;
+      yDetail.push({i:r+1, bi:b[r], termos:termos, result:y[r]});
+    }
+
+    // U·x = y  (substituição para trás)
+    var x = new Array(n).fill(0);
+    var xDetail = [];
+    for (var r2=n-1; r2>=0; r2--){
+      var soma2 = 0, termos2 = [];
+      for (var c2=r2+1; c2<n; c2++){ soma2 += U[r2][c2]*x[c2]; termos2.push({coef:U[r2][c2], val:x[c2], idx:c2+1}); }
+      x[r2] = (y[r2]-soma2)/U[r2][r2];
+      xDetail.unshift({i:r2+1, yi:y[r2], termos:termos2, aii:U[r2][r2], result:x[r2]});
+    }
+
+    // conferência L·U
+    var LU = mk(n, n, 0);
+    for (var a=0;a<n;a++) for (var bb=0;bb<n;bb++){ var s=0; for (var cc=0;cc<n;cc++) s += L[a][cc]*U[cc][bb]; LU[a][bb]=s; }
+
+    return {n:n, A:clone(A0), b:b, L:L, U:U, LU:LU, etapas:etapas, y:y, x:x, yDetail:yDetail, xDetail:xDetail, falhou:falhou};
+  }
+
+  function luForwardFormula(d){
+    var s = "y"+d.i+" = "+fmt(d.bi);
+    d.termos.forEach(function(t){
+      if (t.coef >= 0) s += " − "+fmt(t.coef)+"·y"+t.idx;
+      else s += " + "+fmt(-t.coef)+"·y"+t.idx;
+    });
+    s += "   =   "+fmt(d.result);
+    return s;
+  }
+  function luBackFormula(d){
+    var s = "x"+d.i+" = ("+fmt(d.yi);
+    d.termos.forEach(function(t){
+      if (t.coef >= 0) s += " − "+fmt(t.coef)+"·x"+t.idx;
+      else s += " + "+fmt(-t.coef)+"·x"+t.idx;
+    });
+    s += ") ÷ "+num(d.aii)+"   =   "+fmt(d.result);
+    return s;
+  }
+
+  // ---------- UI: matrix editor ----------
+  function buildEditor(){
+    var wrap = document.getElementById("matrixEditor");
+    wrap.innerHTML = "";
+    var caption = document.getElementById("matrixCaption");
+
+    if (state.method === "gauss"){
+      resizeGauss();
+      document.getElementById("matrixHead").textContent = "MATRIZ AUMENTADA [A | b]";
+      caption.textContent = "As "+state.cols+" primeiras colunas são os coeficientes; a última (destacada) é o vetor b.";
+      var row = document.createElement("div");
+      row.className = "matrix-row";
+      var grid = document.createElement("div");
+      grid.className = "matrix-grid";
+      grid.style.gridTemplateColumns = "repeat("+(state.cols+1)+", 62px)";
+      grid.style.gridTemplateRows = "repeat("+state.rows+", 40px)";
+      for (var i=0;i<state.rows;i++){
+        for (var j=0;j<state.cols+1;j++){
+          var cw = document.createElement("div");
+          cw.className = "cell-wrap" + (j===state.cols ? " aug":"");
+          var inp = document.createElement("input");
+          inp.type = "number"; inp.step = "any"; inp.className = "cell";
+          inp.value = state.A[i][j];
+          inp.dataset.i = i; inp.dataset.j = j;
+          inp.addEventListener("input", function(){
+            var ii = +this.dataset.i, jj = +this.dataset.j;
+            state.A[ii][jj] = this.value === "" ? 0 : parseFloat(this.value);
+            saveLocal(); render();
+          });
+          cw.appendChild(inp);
+          grid.appendChild(cw);
+        }
+      }
+      row.appendChild(grid);
+      wrap.appendChild(row);
+    } else {
+      resizeJacobi();
+      document.getElementById("matrixHead").textContent = "MATRIZ A e VETOR b";
+      caption.textContent = state.method === "lu"
+        ? "Sistema quadrado A·x = b — a fatoração é feita em A; b entra depois, em L·y = b."
+        : "Sistema quadrado A·x = b — a coluna destacada é b.";
+      var row2 = document.createElement("div");
+      row2.className = "matrix-row";
+      var grid2 = document.createElement("div");
+      grid2.className = "matrix-grid";
+      grid2.style.gridTemplateColumns = "repeat("+state.jn+", 62px)";
+      grid2.style.gridTemplateRows = "repeat("+state.jn+", 40px)";
+      for (var a=0;a<state.jn;a++){
+        for (var c2=0;c2<state.jn;c2++){
+          var cw2 = document.createElement("div");
+          cw2.className = "cell-wrap";
+          var inp2 = document.createElement("input");
+          inp2.type = "number"; inp2.step = "any"; inp2.className = "cell";
+          inp2.value = state.A[a][c2];
+          inp2.dataset.i = a; inp2.dataset.j = c2;
+          inp2.addEventListener("input", function(){
+            var ii = +this.dataset.i, jj = +this.dataset.j;
+            state.A[ii][jj] = this.value === "" ? 0 : parseFloat(this.value);
+            saveLocal(); render();
+          });
+          cw2.appendChild(inp2);
+          grid2.appendChild(cw2);
+        }
+      }
+      row2.appendChild(grid2);
+      wrap.appendChild(row2);
+
+      var bcol = document.createElement("div");
+      bcol.className = "b-col";
+      var lbl = document.createElement("div"); lbl.className = "b-label"; lbl.textContent = "b";
+      bcol.appendChild(lbl);
+      for (var bi=0; bi<state.jn; bi++){
+        var binp = document.createElement("input");
+        binp.type = "number"; binp.step = "any"; binp.className = "bcell";
+        binp.value = state.b[bi];
+        binp.dataset.i = bi;
+        binp.addEventListener("input", function(){
+          var ii = +this.dataset.i;
+          state.b[ii] = this.value === "" ? 0 : parseFloat(this.value);
+          saveLocal(); render();
+        });
+        bcol.appendChild(binp);
+      }
+      row2.appendChild(bcol);
+    }
+  }
+
+  // ---------- UI: steps rendering ----------
+  function chipClass(type){
+    return {init:"chip-init", swap:"chip-swap", norm:"chip-norm", elim:"chip-elim", skip:"chip-skip", final:"chip-final"}[type] || "chip-init";
+  }
+  function chipLabel(type){
+    return {init:"início", swap:"troca", norm:"normalização", elim:"eliminação", skip:"ignorada", final:"resultado"}[type] || type;
+  }
+
+  function matrixTable(mtx, hiRows, pivotRow, pivotCol, augAt){
+    var t = document.createElement("table");
+    t.className = "mtx";
+    mtx.forEach(function(row, ri){
+      var tr = document.createElement("tr");
+      row.forEach(function(val, ci){
+        var td = document.createElement("td");
+        td.textContent = fmt(val);
+        if (augAt !== undefined && ci === augAt) td.classList.add("aug-sep");
+        if (hiRows && hiRows.indexOf(ri) !== -1) td.classList.add("rowhi");
+        if (pivotRow === ri && pivotCol === ci) td.classList.add("pivot");
+        tr.appendChild(td);
+      });
+      t.appendChild(tr);
+    });
+    return t;
+  }
+
+  function renderGaussSteps(steps){
+    var body = document.getElementById("stepsBody");
+    body.innerHTML = "";
+    var list = document.createElement("div");
+    list.className = "step-list";
+    steps.forEach(function(s, idx){
+      var card = document.createElement("div");
+      card.className = "step";
+      var top = document.createElement("div"); top.className = "step-top";
+      top.innerHTML = '<span class="step-idx mono">'+String(idx+1).padStart(2,"0")+'</span>'+
+        '<span class="step-chip '+chipClass(s.type)+'">'+chipLabel(s.type)+'</span>'+
+        '<span class="step-desc mono">'+s.desc+'</span>';
+      var bodyEl = document.createElement("div"); bodyEl.className = "step-body";
+      bodyEl.appendChild(matrixTable(s.matrix, s.hiRows, s.pivotRow, s.pivotCol, state.cols));
+      card.appendChild(top); card.appendChild(bodyEl);
+      list.appendChild(card);
+    });
+    body.appendChild(list);
+
+    var last = steps[steps.length-1];
+    var n = last.matrix.length, m = state.cols;
+    var box = document.createElement("div"); box.className = "final-box";
+    var h = document.createElement("h3"); h.textContent = "Solução lida da matriz reduzida";
+    box.appendChild(h);
+    var vals = document.createElement("div"); vals.className = "final-vals";
+    for (var i=0;i<Math.min(n,m);i++){
+      var s = document.createElement("span");
+      s.textContent = "x"+(i+1)+" = "+fmt(last.matrix[i][m]);
+      vals.appendChild(s);
+    }
+    box.appendChild(vals);
+    body.appendChild(box);
+  }
+
+  function renderJacobiSteps(run){
+    var body = document.getElementById("stepsBody");
+    body.innerHTML = "";
+
+    // formatação local: usa casas extras quando modo tolerância
+    var f = run.stopMode === "tol" ? function(x){ return fmtTol(x, run.tolerance); } : fmt;
+
+    // chute inicial: só uma linha de contexto, não é uma iteração
+    var chuteLine = document.createElement("div");
+    chuteLine.className = "mono"; chuteLine.style.fontSize = "12.5px"; chuteLine.style.color = "var(--ink)"; chuteLine.style.marginBottom = "10px";
+    var partesChute = [];
+    for (var z=0; z<run.n; z++) partesChute.push("x"+(z+1)+" = "+f(run.historico[0][z]));
+    chuteLine.textContent = "Chute inicial (x⁰):   "+partesChute.join("     ");
+    body.appendChild(chuteLine);
+
+    var list = document.createElement("div");
+    list.className = "step-list";
+
+    run.iterations.forEach(function(it){
+      var card = document.createElement("div"); card.className = "step";
+      var top = document.createElement("div"); top.className = "step-top";
+      var errSpan = run.stopMode === "tol"
+        ? '<span class="step-desc mono" style="margin-left:auto;">erro = '+it.err.toExponential(3)+'</span>'
+        : '';
+      top.innerHTML = '<span class="step-idx mono">'+String(it.k+1).padStart(2,"0")+'</span>'+
+        '<span class="step-chip chip-elim">iteração '+(it.k+1)+'</span>'+errSpan;
+      var bodyEl = document.createElement("div"); bodyEl.className = "step-body";
+      it.detail.forEach(function(d){
+        var p = document.createElement("div");
+        p.className = "mono"; p.style.fontSize = "12.5px"; p.style.marginBottom = "4px"; p.style.color = "var(--ink)";
+        // usa f local para respeitar casas da tolerância
+        var s = "x"+(d.i+1)+" = ("+f(d.bi);
+        d.terms.forEach(function(t){
+          if (t.coef >= 0) s += " − "+f(t.coef)+"("+f(t.val)+")";
+          else s += " + "+f(-t.coef)+"("+f(t.val)+")";
+        });
+        s += ") ÷ "+f(d.aii)+"   =   "+f(d.result);
+        p.textContent = s;
+        bodyEl.appendChild(p);
+      });
+      card.appendChild(top); card.appendChild(bodyEl);
+      list.appendChild(card);
+    });
+    body.appendChild(list);
+
+    // ── tabela de iterações (orientação transposta: linhas = iterações) ──
+    var isTol = run.stopMode === "tol";
+    var wrap = document.createElement("div"); wrap.className = "iter-table-wrap";
+    var tbl = document.createElement("table"); tbl.className = "iter";
+
+    // cabeçalho: k | x1 | x2 | ... | Erro Máximo (só tolerância)
+    var thead = document.createElement("tr");
+    var thK = document.createElement("th"); thK.textContent = "k"; thead.appendChild(thK);
+    for (var xi=0; xi<run.n; xi++){
+      var thX = document.createElement("th"); thX.textContent = "x"+(xi+1); thead.appendChild(thX);
+    }
+    if (isTol){
+      var thErr = document.createElement("th");
+      thErr.textContent = "Erro Máximo";
+      thErr.style.fontFamily = "monospace";
+      thErr.style.color = "var(--teal,#0ea5e9)";
+      thead.appendChild(thErr);
+    }
+    tbl.appendChild(thead);
+
+    // iteração 0 (chute inicial) — sem erro
+    var tr0 = document.createElement("tr");
+    var td0k = document.createElement("td"); td0k.textContent = "0"; td0k.style.fontWeight = "600"; tr0.appendChild(td0k);
+    for (var xi0=0; xi0<run.n; xi0++){
+      var td0 = document.createElement("td"); td0.textContent = f(run.historico[0][xi0]); tr0.appendChild(td0);
+    }
+    if (isTol){ var tdE0 = document.createElement("td"); tdE0.textContent = "—"; tdE0.style.fontFamily = "monospace"; tr0.appendChild(tdE0); }
+    tbl.appendChild(tr0);
+
+    // demais iterações
+    run.iterations.forEach(function(it){
+      var converged = isTol && run.convergedAt !== null && it.k === run.convergedAt;
+      var trI = document.createElement("tr");
+      if (converged) trI.style.background = "rgba(16,185,129,0.08)";
+      var tdKi = document.createElement("td"); tdKi.textContent = it.k+1; tdKi.style.fontWeight = "600"; trI.appendChild(tdKi);
+      for (var xi2=0; xi2<run.n; xi2++){
+        var tdXi = document.createElement("td"); tdXi.textContent = f(it.x[xi2]); trI.appendChild(tdXi);
+      }
+      if (isTol){
+        var tdEi = document.createElement("td");
+        tdEi.style.fontFamily = "monospace"; tdEi.style.color = "var(--teal,#0ea5e9)";
+        if (converged){
+          tdEi.innerHTML = fmtTol(it.err, run.tolerance)+
+            ' <span style="display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;font-size:10px;font-weight:700;background:#10b981;color:#fff;font-family:sans-serif;vertical-align:middle;">✓ convergiu</span>';
+        } else {
+          tdEi.textContent = fmtTol(it.err, run.tolerance);
+        }
+        trI.appendChild(tdEi);
+      }
+      tbl.appendChild(trI);
+    });
+
+    wrap.appendChild(tbl);
+    body.appendChild(wrap);
+
+    var last = run.historico[run.historico.length-1];
+    var box = document.createElement("div"); box.className = "final-box";
+    var iterLabel = run.stopMode === "tol"
+      ? (run.convergedAt !== null
+          ? "Convergiu na iteração " + (run.convergedAt + 1) + " (erro ≤ " + run.tolerance + ")"
+          : "Não convergiu em 1000 iterações (tolerância " + run.tolerance + ")")
+      : "Resultado após " + run.iterations.length + " iterações";
+    var h = document.createElement("h3"); h.textContent = iterLabel;
+    box.appendChild(h);
+    var vals = document.createElement("div"); vals.className = "final-vals";
+    for (var vi=0; vi<run.n; vi++){
+      var s = document.createElement("span"); s.textContent = "x"+(vi+1)+" = "+f(last[vi]);
+      vals.appendChild(s);
+    }
+    box.appendChild(vals);
+    body.appendChild(box);
+  }
+
+  function renderLuSteps(run){
+    var body = document.getElementById("stepsBody");
+    body.innerHTML = "";
+    var list = document.createElement("div");
+    list.className = "step-list";
+
+    function card(idx, chip, desc){
+      var c = document.createElement("div"); c.className = "step";
+      var top = document.createElement("div"); top.className = "step-top";
+      top.innerHTML = '<span class="step-idx mono">'+String(idx).padStart(2,"0")+'</span>'+
+        '<span class="step-chip chip-elim">'+chip+'</span>'+
+        (desc ? '<span class="step-desc mono">'+desc+'</span>' : '');
+      var b = document.createElement("div"); b.className = "step-body";
+      c.appendChild(top); c.appendChild(b);
+      list.appendChild(c);
+      return b;
+    }
+    function linha(texto, host){
+      var p = document.createElement("div");
+      p.className = "mono"; p.style.fontSize = "12.5px"; p.style.marginBottom = "4px"; p.style.color = "var(--ink)";
+      p.textContent = texto;
+      host.appendChild(p);
+      return p;
+    }
+
+    var idx = 1;
+    var b0 = card(idx++, "matriz A", "matriz de coeficientes fornecida");
+    b0.appendChild(matrixTable(run.A));
+
+    run.etapas.forEach(function(e){
+      var host = card(idx++, "etapa "+e.k, "pivô a"+e.k+e.k+" = "+fmt(e.pivo));
+      e.mults.forEach(function(m){
+        linha("L"+m.i+" → L"+m.i+" − m"+m.i+m.k+"L"+m.k+"        m"+m.i+m.k+" = "+fmt(m.m), host);
+      });
+      host.appendChild(matrixTable(e.matrix));
+    });
+
+    if (run.falhou){
+      var hf = card(idx++, "atenção", "");
+      var p = linha(run.falhou, hf); p.style.color = "var(--danger)";
+      body.appendChild(list);
+      return;
+    }
+
+    var hL = card(idx++, "fatores", "L é triangular inferior com 1 na diagonal e os multiplicadores abaixo dela");
+    var wrapLU = document.createElement("div");
+    wrapLU.style.display = "flex"; wrapLU.style.gap = "26px"; wrapLU.style.flexWrap = "wrap";
+    var colL = document.createElement("div");
+    var tagL = document.createElement("div"); tagL.className = "mono"; tagL.style.fontSize="12px"; tagL.style.marginBottom="5px"; tagL.textContent = "L";
+    colL.appendChild(tagL); colL.appendChild(matrixTable(run.L));
+    var colU = document.createElement("div");
+    var tagU = document.createElement("div"); tagU.className = "mono"; tagU.style.fontSize="12px"; tagU.style.marginBottom="5px"; tagU.textContent = "U";
+    colU.appendChild(tagU); colU.appendChild(matrixTable(run.U));
+    wrapLU.appendChild(colL); wrapLU.appendChild(colU);
+    hL.appendChild(wrapLU);
+
+    var hV = card(idx++, "conferência", "L·U tem que reproduzir a matriz A original");
+    hV.appendChild(matrixTable(run.LU));
+
+    var hY = card(idx++, "L·y = b", "substituição para frente, de cima para baixo");
+    run.yDetail.forEach(function(d){ linha(luForwardFormula(d), hY); });
+
+    var hX = card(idx++, "U·x = y", "substituição para trás, de baixo para cima");
+    run.xDetail.slice().reverse().forEach(function(d){ linha(luBackFormula(d), hX); });
+
+    body.appendChild(list);
+
+    var box = document.createElement("div"); box.className = "final-box";
+    var h = document.createElement("h3"); h.textContent = "Solução do sistema";
+    box.appendChild(h);
+    var vals = document.createElement("div"); vals.className = "final-vals";
+    for (var i=0;i<run.n;i++){
+      var s = document.createElement("span"); s.textContent = "x"+(i+1)+" = "+fmt(run.x[i]);
+      vals.appendChild(s);
+    }
+    box.appendChild(vals);
+    body.appendChild(box);
+  }
+
+  var lastComputation = null;
+
+  function render(){
+    document.getElementById("stepsHead").textContent =
+      state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
+      state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" : "PASSO A PASSO — JACOBI";
+    if (state.method === "lu"){
+      var lurun = luSteps(state.A, state.b);
+      lastComputation = {method:"lu", run:lurun};
+      renderLuSteps(lurun);
+      
+      document.getElementById("btnPdfScilab").disabled = false;
+      document.getElementById("btnPdfScinotes").disabled = false;
+      document.getElementById("btnScilabCode").disabled = false;
+      return;
+    }
+    if (state.method === "gauss"){
+      var steps = gaussJordanSteps(state.A);
+      lastComputation = {method:"gauss", steps:steps};
+      renderGaussSteps(steps);
+    } else {
+      var diag0 = state.A.some(function(row,i){ return Math.abs(row[i]) < 1e-9; });
+      var run = jacobiRun(state.A, state.b, state.inicio, state.numIter, state.stopMode, state.tolerance);
+      lastComputation = {method:"jacobi", run:run, diagWarn:diag0};
+      renderJacobiSteps(run);
+      if (diag0){
+        var warn = document.createElement("div");
+        warn.className = "hint"; warn.style.color = "var(--danger)"; warn.style.marginTop = "10px";
+        warn.textContent = "Atenção: há um elemento zero na diagonal principal — o método de Jacobi pode não convergir.";
+        document.getElementById("stepsBody").appendChild(warn);
+      }
+    }
+    
+    document.getElementById("btnPdfScilab").disabled = false;
+    document.getElementById("btnPdfScinotes").disabled = false;
+    document.getElementById("btnScilabCode").disabled = false;
+  }
+
+  // ---------- controls ----------
+  function setMethod(m){
+    state.method = m;
+    document.querySelectorAll(".method-opt").forEach(function(el){
+      el.classList.toggle("active", el.dataset.method === m);
+    });
+    document.getElementById("jacobiParams").style.display = m === "jacobi" ? "flex" : "none";
+    document.getElementById("rowsField").style.display = m === "gauss" ? "flex" : "none";
+    document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
+    document.getElementById("dimsHint").textContent = m === "gauss"
+      ? "A última coluna é o vetor b (termos independentes)."
+      : "Sistema quadrado A (n×n) — o vetor b aparece ao lado da matriz.";
+    if (m !== "gauss"){ document.getElementById("colsVal").textContent = state.jn; }
+    else { document.getElementById("colsVal").textContent = state.cols; document.getElementById("rowsVal").textContent = state.rows; }
+    buildEditor(); render(); saveLocal();
+  }
+
+  document.getElementById("methodSwitch").addEventListener("click", function(e){
+    var opt = e.target.closest(".method-opt");
+    if (!opt) return;
+    setMethod(opt.dataset.method);
+  });
+
+  document.getElementById("dimsPanel").addEventListener("click", function(e){
+    var btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    var act = btn.dataset.act;
+    if (state.method === "gauss"){
+      if (act === "rows-") state.rows = Math.max(2, state.rows-1);
+      if (act === "rows+") state.rows = Math.min(8, state.rows+1);
+      if (act === "cols-") state.cols = Math.max(1, state.cols-1);
+      if (act === "cols+") state.cols = Math.min(7, state.cols+1);
+      document.getElementById("rowsVal").textContent = state.rows;
+      document.getElementById("colsVal").textContent = state.cols;
+    } else {
+      if (act === "cols-") state.jn = Math.max(2, state.jn-1);
+      if (act === "cols+") state.jn = Math.min(7, state.jn+1);
+      document.getElementById("colsVal").textContent = state.jn;
+    }
+    buildEditor(); render(); saveLocal();
+  });
+
+  document.getElementById("inicioToggle").addEventListener("click", function(e){
+    var btn = e.target.closest("button[data-v]");
+    if (!btn) return;
+    state.inicio = parseInt(btn.dataset.v, 10);
+    document.querySelectorAll("#inicioToggle button").forEach(function(b){ b.classList.toggle("active", b===btn); });
+    render(); saveLocal();
+  });
+
+  document.getElementById("numIter").addEventListener("input", function(){
+    var v = parseInt(this.value, 10);
+    state.numIter = isNaN(v) ? 1 : Math.max(1, v);
+    render(); saveLocal();
+  });
+
+  document.getElementById("tolInput").addEventListener("input", function(){
+    var v = parseFloat(this.value);
+    if (!isNaN(v) && v > 0){ state.tolerance = v; render(); saveLocal(); }
+  });
+
+  document.querySelectorAll("input[name='stopMode']").forEach(function(radio){
+    radio.addEventListener("change", function(){
+      state.stopMode = this.value;
+      document.getElementById("fieldNumIter").style.display = this.value === "iter" ? "" : "none";
+      document.getElementById("fieldTolerance").style.display = this.value === "tol" ? "" : "none";
+      render(); saveLocal();
+    });
+  });
+
+  document.getElementById("btnExample").addEventListener("click", function(){
+    if (state.method === "gauss"){
+      state.rows = 3; state.cols = 3;
+      state.A = [[2,-4,4,8],[-1,1,1,0],[1,-2,3,3]];
+      document.getElementById("rowsVal").textContent = state.rows;
+      document.getElementById("colsVal").textContent = state.cols;
+    } else if (state.method === "lu"){
+      state.jn = 3;
+      state.A = [[3,2,4],[1,1,2],[4,3,2]];
+      state.b = [1,2,3];
+      document.getElementById("colsVal").textContent = state.jn;
+    } else {
+      state.jn = 4;
+      state.A = [[9,1,-2,2],[1,15,-3,2],[1,-2,8,3],[2,2,1,12]];
+      state.b = [10.5,14.6,18.1,19.4];
+      document.getElementById("colsVal").textContent = state.jn;
+      document.getElementById("numIter").value = 10; state.numIter = 10;
+    }
+    buildEditor(); render(); saveLocal();
+  });
+
+  document.getElementById("btnClear").addEventListener("click", function(){
+    if (state.method === "gauss"){ state.A = mk(state.rows, state.cols+1, 0); }
+    else { state.A = mk(state.jn, state.jn, 0); state.b = new Array(state.jn).fill(0); }
+    buildEditor(); render(); saveLocal();
+  });
+
+  // ---------- header (identificação do PDF) ----------
+  var chkHeaderEl = document.getElementById("chkHeader");
+  var headerFieldsEl = document.getElementById("headerFields");
+  var headerNameEl = document.getElementById("headerName");
+  var headerQuestionEl = document.getElementById("headerQuestion");
+
+  chkHeaderEl.addEventListener("change", function(){
+    state.headerOn = chkHeaderEl.checked;
+    headerFieldsEl.style.display = state.headerOn ? "block" : "none";
+    saveLocal();
+  });
+  headerNameEl.addEventListener("input", function(){ state.headerName = headerNameEl.value; saveLocal(); });
+  headerQuestionEl.addEventListener("input", function(){ state.headerQuestion = headerQuestionEl.value; saveLocal(); });
+
+  // ---------- PDF ----------
+  var PALETTE = {
+    ink: [22,35,59], soft: [85,96,122], brass: [169,114,31], brassDeep:[126,84,22],
+    teal: [39,100,88], line: [222,226,216], tealTint:[220,234,230], brassTint:[241,227,203],
+    ifGreen: [56,158,74], ifRed: [200,32,44]
+  };
+
+  function buildPdf(){
+    if (!lastComputation) return;
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({unit:"pt", format:"a4"});
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 42;
+    var y = margin;
+
+    function asciiClean(s){
+      return String(s)
+        .replace(/[\u2212\u2013\u2014]/g, "-")   // minus / en-dash / em-dash
+        .replace(/\u2192/g, "->")                 // right arrow
+        .replace(/\u2194/g, "<->")                // left-right arrow
+        .replace(/\u00F7/g, "/")                  // division sign
+        .replace(/\u00D7/g, "x")                  // multiplication sign
+        .replace(/\u27F9|\u21D2/g, "=>")          // implies arrow
+        .replace(/\u00B7/g, "");                  // ponto de multiplicação: 2·L1 -> 2L1
+    }
+
+    function ensureSpace(h){
+      if (y + h > pageH - margin){ doc.addPage(); y = margin; }
+    }
+
+    // texto "reforçado": mesmo peso tipográfico (normal), mas com um traço fino
+    // na mesma cor do preenchimento — deixa a letra mais legível sem virar negrito
+    function firmText(str, x, yy, opts){
+      opts = opts || {};
+      var o = {};
+      if (opts.align) o.align = opts.align;
+      doc.text(asciiClean(str), x, yy, o);
+    }
+
+    var today = new Date();
+    var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+
+    // Identification block — replica o cabeçalho das listas/atividades do IFMG:
+    // marca do instituto + linhas de Disciplina/Curso, Professora e Aluno(a)
+    if (state.headerOn){
+      var idBoxY = y;
+      var idBoxW = pageW - 2*margin;
+      var rowLogoH = 40, rowH = 22;
+      var idBoxH = rowLogoH + rowH*3;
+
+      doc.setDrawColor.apply(doc, PALETTE.ink); doc.setLineWidth(1);
+      doc.rect(margin, idBoxY, idBoxW, idBoxH);
+
+      // linhas horizontais internas
+      doc.setDrawColor.apply(doc, PALETTE.line); doc.setLineWidth(0.6);
+      var rowY1 = idBoxY + rowLogoH;
+      var rowY2 = rowY1 + rowH;
+      var rowY3 = rowY2 + rowH;
+      doc.line(margin, rowY1, margin+idBoxW, rowY1);
+      doc.line(margin, rowY2, margin+idBoxW, rowY2);
+      doc.line(margin, rowY3, margin+idBoxW, rowY3);
+      // linha vertical dividindo Disciplina e Curso
+      var midX = margin + idBoxW*0.62;
+      doc.line(midX, rowY1, midX, rowY2);
+
+      // marca do IFMG: grade 3 colunas x 4 linhas formando o "F", ponto vermelho no canto
+      var gx = margin+12, gy = idBoxY+7, gs = 6.5, gp = 1.3;
+      var padrao = [
+        [1,1,1],
+        [1,1,0],
+        [1,1,1],
+        [1,0,0]
+      ];
+      for (var gr=0; gr<4; gr++){
+        for (var gc=0; gc<3; gc++){
+          if (!padrao[gr][gc]) continue;
+          doc.setFillColor.apply(doc, (gr===0 && gc===0) ? PALETTE.ifRed : PALETTE.ifGreen);
+          doc.rect(gx+gc*(gs+gp), gy+gr*(gs+gp), gs, gs, "F");
+        }
+      }
+
+      var textX = gx + 3*(gs+gp) + 10;
+      doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor.apply(doc, PALETTE.ink);
+      firmText("INSTITUTO FEDERAL DE EDUCAÇÃO, CIÊNCIA E TECNOLOGIA", textX, idBoxY+15);
+      firmText("MINAS GERAIS", textX, idBoxY+26);
+      doc.setFontSize(9); doc.setTextColor.apply(doc, PALETTE.soft);
+      firmText("Campus Santa Luzia", textX, idBoxY+36);
+
+      doc.setFontSize(10.5); doc.setTextColor.apply(doc, PALETTE.ink);
+      firmText("Disciplina: Cálculo Numérico", margin+12, rowY1+15);
+      firmText("Curso: Engenharia Civil", midX+12, rowY1+15);
+      firmText("Professora: Lucélia Radin", margin+12, rowY2+15);
+      firmText("Aluno(a): "+(state.headerName || "_______________________________"), margin+12, rowY3+15);
+
+      y = idBoxY + idBoxH + 22;
+    }
+
+    // Título do PDF — é a questão que o usuário escolhe, no lugar do nome do método
+    doc.setFillColor.apply(doc, PALETTE.ink);
+    doc.rect(margin, y, 4, 30, "F");
+    doc.setFont("helvetica","bold"); doc.setFontSize(19); doc.setTextColor.apply(doc, PALETTE.ink);
+    var questionTitle = state.headerQuestion ? ("Questão " + state.headerQuestion) : "Questão";
+    doc.text(asciiClean(questionTitle), margin+14, y+21);
+    y += 42;
+
+    doc.setDrawColor.apply(doc, PALETTE.line); doc.setLineWidth(0.7);
+    doc.line(margin, y, pageW-margin, y);
+    y += 20;
+
+    function sectionLabel(text){
+      ensureSpace(26);
+      doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor.apply(doc, PALETTE.ink);
+      firmText(text.toUpperCase(), margin, y);
+      y += 16;
+    }
+
+    function drawMatrixTable(mtx, opts){
+      opts = opts || {};
+      var big = !!opts.big;
+      var cols = mtx[0].length;
+      var cellW = big ? 66 : 54, cellH = big ? 32 : 25;
+      var tableW = cols*cellW;
+      if (margin + tableW > pageW - margin) cellW = (pageW - 2*margin)/cols;
+      tableW = cols*cellW;
+      var startX = opts.startX !== undefined ? opts.startX : margin;
+      ensureSpace(mtx.length*cellH + 12);
+      var startY = opts.startY !== undefined ? opts.startY : y;
+      doc.setFont("courier","normal"); doc.setFontSize(big ? 14 : 11.5);
+      for (var r=0;r<mtx.length;r++){
+        for (var c=0;c<cols;c++){
+          var cx = startX + c*cellW, cy = startY + r*cellH;
+          var isPivot = (opts.pivotRow===r && opts.pivotCol===c);
+          var isHiRow = opts.hiRows && opts.hiRows.indexOf(r) !== -1;
+          // realce discreto: só um fundo cinza-claro neutro, sem tinta colorida
+          if (isPivot || isHiRow) { doc.setFillColor(244,244,240); doc.rect(cx, cy, cellW, cellH, "F"); }
+          doc.setDrawColor.apply(doc, isPivot ? PALETTE.ink : (big ? PALETTE.ink : PALETTE.line));
+          doc.setLineWidth(isPivot ? 1.1 : (big ? 0.9 : 0.5));
+          doc.rect(cx, cy, cellW, cellH);
+          if (opts.augAt !== undefined && c === opts.augAt){
+            doc.setDrawColor.apply(doc, PALETTE.ink); doc.setLineWidth(big ? 1.3 : 1.1);
+            doc.line(cx, cy, cx, cy+cellH);
+            doc.setLineWidth(0.5); doc.setDrawColor.apply(doc, PALETTE.line);
+          }
+          doc.setTextColor.apply(doc, PALETTE.ink);
+          firmText(fmt(mtx[r][c]), cx+cellW/2, cy+cellH/2+3.5, {align:"center"});
+        }
+      }
+      var bottom = startY + mtx.length*cellH + (big ? 20 : 14);
+      if (opts.startY === undefined) y = bottom;
+      return {w: cols*cellW, h: mtx.length*cellH, bottom: bottom};
+    }
+
+    // numeração discreta à esquerda, descrição em peso normal
+    function stepHeader(idx, desc){
+      ensureSpace(20);
+      var numLabel = String(idx).padStart(2,"0")+".";
+      doc.setFont("helvetica","normal"); doc.setFontSize(10);
+      doc.setTextColor.apply(doc, PALETTE.soft);
+      doc.text(numLabel, margin, y);
+      var numW = doc.getTextWidth(numLabel);
+      doc.setFontSize(10.5); doc.setTextColor.apply(doc, PALETTE.ink);
+      firmText(desc, margin+numW+8, y);
+      y += 16;
+    }
+
+    function resultBox(rotulo, partes){
+      ensureSpace(54);
+      doc.setDrawColor.apply(doc, PALETTE.ink); doc.setLineWidth(1);
+      doc.rect(margin, y-16, pageW-2*margin, 38);
+      doc.setFillColor.apply(doc, PALETTE.ink);
+      doc.rect(margin, y-16, 4, 38, "F");
+      doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor.apply(doc, PALETTE.ink);
+      firmText(rotulo, margin+14, y-3);
+      doc.setFont("helvetica","normal"); doc.setFontSize(12); doc.setTextColor.apply(doc, PALETTE.ink);
+      firmText(partes.join("     "), margin+14, y+13);
+      y += 38;
+    }
+
+    if (lastComputation.method === "gauss"){
+      sectionLabel("Passo a passo");
+      var todos = lastComputation.steps;
+      todos.forEach(function(s, idx){
+        var ehFinal = (idx === todos.length-1);
+        stepHeader(idx+1, s.desc);
+        drawMatrixTable(s.matrix, {hiRows:s.hiRows, pivotRow:s.pivotRow, pivotCol:s.pivotCol, augAt: state.cols, big: ehFinal});
+      });
+      var last = todos[todos.length-1];
+      var n = last.matrix.length, m = state.cols;
+      var solParts = [];
+      for (var i=0;i<Math.min(n,m);i++) solParts.push("x"+(i+1)+" = "+fmt(last.matrix[i][m]));
+      resultBox("SOLUÇÃO", solParts);
+    } else if (lastComputation.method === "lu"){
+      var lu = lastComputation.run;
+      sectionLabel("Passo a passo");
+
+      stepHeader(1, "Matriz A de coeficientes");
+      drawMatrixTable(lu.A, {});
+
+      var passo = 2;
+      lu.etapas.forEach(function(e){
+        stepHeader(passo++, "Etapa "+e.k+" — pivô a"+e.k+e.k+" = "+fmt(e.pivo));
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+        e.mults.forEach(function(mm){
+          ensureSpace(15);
+          firmText("L"+mm.i+" -> L"+mm.i+" − m"+mm.i+mm.k+"L"+mm.k+"        m"+mm.i+mm.k+" = "+fmt(mm.m), margin+22, y);
+          y += 13;
+        });
+        y += 3;
+        drawMatrixTable(e.matrix, {});
+      });
+
+      if (lu.falhou){
+        ensureSpace(20);
+        doc.setFont("helvetica","normal"); doc.setFontSize(9.5); doc.setTextColor(165,51,59);
+        doc.text(asciiClean(lu.falhou), margin, y); y += 16;
+      } else {
+        stepHeader(passo++, "Fatores L e U");
+        var baseY = y;
+        var infoL = drawMatrixTable(lu.L, {startX: margin, startY: baseY+14});
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+        doc.text("L", margin, baseY+6);
+        var xU = margin + infoL.w + 34;
+        drawMatrixTable(lu.U, {startX: xU, startY: baseY+14});
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+        doc.text("U", xU, baseY+6);
+        y = infoL.bottom + 14;
+
+        stepHeader(passo++, "Conferência: L·U reproduz a matriz A");
+        drawMatrixTable(lu.LU, {});
+
+        stepHeader(passo++, "L·y = b — substituição para frente");
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+        lu.yDetail.forEach(function(d){
+          ensureSpace(16);
+          firmText(luForwardFormula(d), margin+22, y); y += 15;
+        });
+        y += 6;
+
+        stepHeader(passo++, "U·x = y — substituição para trás");
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+        lu.xDetail.slice().reverse().forEach(function(d){
+          ensureSpace(16);
+          firmText(luBackFormula(d), margin+22, y); y += 15;
+        });
+        y += 10;
+
+        var solLu = [];
+        for (var li=0; li<lu.n; li++) solLu.push("x"+(li+1)+" = "+fmt(lu.x[li]));
+        resultBox("SOLUÇÃO", solLu);
+      }
+    } else {
+      sectionLabel("Passo a passo");
+
+      function iterBox(titulo, linhas){
+        ensureSpace(16 + linhas.length*15 + 8);
+        doc.setFont("helvetica","normal"); doc.setFontSize(10.5); doc.setTextColor.apply(doc, PALETTE.ink);
+        firmText(titulo, margin, y);
+        y += 15;
+        doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+        linhas.forEach(function(txt){
+          firmText(txt, margin+14, y);
+          y += 14.5;
+        });
+        y += 8;
+      }
+
+      // chute inicial: linha de contexto simples, não conta como iteração
+      var x0 = lastComputation.run.historico[0];
+      var partes0 = [];
+      for (var z0=0; z0<lastComputation.run.n; z0++) partes0.push("x"+(z0+1)+" = "+fmt(x0[z0]));
+      doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
+      ensureSpace(16);
+      firmText("Chute inicial (x0):   "+partes0.join("     "), margin, y);
+      y += 20;
+
+      lastComputation.run.iterations.forEach(function(it){
+        iterBox("ITERAÇÃO "+it.k, it.detail.map(function(d){ return jacobiFormula(d); }));
+      });
+
+      sectionLabel("Tabela de iterações");
+      var head = ["variável"];
+      for (var k=0;k<lastComputation.run.iterations.length;k++) head.push(String(k));
+      var bodyRows = [];
+      for (var i2=0;i2<lastComputation.run.n;i2++){
+        var rowArr = ["x"+(i2+1)];
+        for (var kk=1; kk<lastComputation.run.historico.length; kk++) rowArr.push(fmt(lastComputation.run.historico[kk][i2]));
+        bodyRows.push(rowArr);
+      }
+      ensureSpace(20);
+      doc.autoTable({
+        startY: y,
+        head: [head],
+        body: bodyRows,
+        margin: {left:margin, right:margin},
+        styles: {font:"helvetica", fontStyle:"normal", fontSize:9.5, textColor: PALETTE.ink, lineColor: PALETTE.line, lineWidth:0.5, cellPadding:5},
+        headStyles: {fillColor: PALETTE.ink, textColor:255, fontStyle:"normal"},
+        alternateRowStyles: {fillColor: [247,248,244]}
+      });
+      y = doc.lastAutoTable.finalY + 22;
+
+      var lastX = lastComputation.run.historico[lastComputation.run.historico.length-1];
+      var solParts2 = [];
+      for (var vi=0; vi<lastComputation.run.n; vi++) solParts2.push("x"+(vi+1)+" = "+fmt(lastX[vi]));
+      resultBox("RESULTADO APÓS "+lastComputation.run.iterations.length+" ITERAÇÕES", solParts2);
+      if (lastComputation.diagWarn){
+        ensureSpace(20);
+        doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(165,51,59);
+        doc.text(asciiClean("Atenção: há elemento zero na diagonal principal de A — convergência não garantida."), margin, y);
+        y += 14;
+      }
+    }
+
+    // footer page numbers
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var pg=1; pg<=pageCount; pg++){
+      doc.setPage(pg);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc, PALETTE.soft);
+      doc.text(String(pg)+" / "+pageCount, pageW-margin, pageH-20, {align:"right"});
+    }
+
+    return doc;
+  }
+
+  async function downloadPdf(){
+    var doc = buildPdf();
+    if (!doc) return;
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : "jacobi");
+    var filename = nomeMetodo + "-passo-a-passo.pdf";
+    var blob = doc.output("blob");
+    try{
+      var downloads = await claude.use("downloads");
+      if (downloads){
+        try{
+          await downloads.save({filename: filename, data: blob});
+          return;
+        }catch(err){
+          if (err && err.code === "declined") return;
+          // fall through to browser fallback on other errors
+        }
+      }
+    }catch(e){ /* capability not available — fall back below */ }
+
+    // fallback: plain browser download (works in the chat preview)
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+
+
+  // ---------- versão "impressão do Scilab" ----------
+  // Reaproveita os mesmos dados (steps / lu / jacobi), mas desenha tudo em
+  // texto monoespaçado corrido, como se fosse a saída do console (mprintf + disp),
+  // em vez de tabelas/caixas. Sem cores; só tinta preta em papel.
+
+  // número no formato que o disp() do Scilab mostra: inteiro sempre com "." no final
+  function scNum(x){
+    var s = fmt(x);
+    if (s === "—") return "Nan";
+    if (s.indexOf(".") === -1) s += ".";
+    return s;
+  }
+
+  function scMatrixLines(mtx, augAt){
+    var strs = mtx.map(function(row){ return row.map(scNum); });
+    var ncols = strs[0] ? strs[0].length : 0;
+    var colMax = [];
+    for (var c=0; c<ncols; c++){
+      var mx = 0;
+      strs.forEach(function(row){ if (row[c] && row[c].length > mx) mx = row[c].length; });
+      colMax.push(mx);
+    }
+    return strs.map(function(row){
+      return row.map(function(s, c){
+        var pad = (augAt !== undefined && c === augAt) ? "   " : "  ";
+        return (c===0 ? "" : pad) + s.padStart(colMax[c]);
+      }).join("");
+    });
+  }
+
+  // mesma convenção de parênteses do script real (sempre entre parênteses,
+  // inclusive quando o valor já é negativo — é assim que o mprintf imprime)
+  function scDesc(s){
+    if (s.type === "swap") return "L"+s.rawA+" <-> L"+s.rawB;
+    if (s.type === "norm") return "L"+s.rawLine+" -> L"+s.rawLine+" / ("+fmt(s.rawValue)+")";
+    if (s.type === "elim") return "L"+s.rawTarget+" -> L"+s.rawTarget+" - ("+fmt(s.rawCoef)+")L"+s.rawPivot;
+    return "";
+  }
+
+  function scLuForward(d){
+    var s = "y"+d.i+" = "+fmt(d.bi);
+    d.termos.forEach(function(t){
+      if (t.coef >= 0) s += " - "+fmt(t.coef)+"*y"+t.idx;
+      else s += " + "+fmt(-t.coef)+"*y"+t.idx;
+    });
+    s += "  =  "+fmt(d.result);
+    return s;
+  }
+  function scLuBack(d){
+    var s = "x"+d.i+" = ("+fmt(d.yi);
+    d.termos.forEach(function(t){
+      if (t.coef >= 0) s += " - "+fmt(t.coef)+"*x"+t.idx;
+      else s += " + "+fmt(-t.coef)+"*x"+t.idx;
+    });
+    s += ") / ("+fmt(d.aii)+")  =  "+fmt(d.result);
+    return s;
+  }
+  function scJacobiFormula(d){
+    var s = "x"+(d.i+1)+" = ("+fmt(d.bi);
+    d.terms.forEach(function(t){
+      if (t.coef >= 0) s += " - "+fmt(t.coef)+"*"+fmt(t.val);
+      else s += " + "+fmt(-t.coef)+"*"+fmt(t.val);
+    });
+    s += ") / ("+fmt(d.aii)+")  =  "+fmt(d.result);
+    return s;
+  }
+
+  function buildScilabPdf(){
+    if (!lastComputation) return;
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({unit:"pt", format:"a4"});
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 72; // 25.4mm = 1in, igual à Config. de Página padrão do Scilab
+    var y = margin;
+    var INK = [20,20,20], SOFT = [110,110,110];
+
+    function asciiClean(s){
+      return String(s)
+        .replace(/[\u2212\u2013\u2014]/g, "-")
+        .replace(/\u2192/g, "->")
+        .replace(/\u2194/g, "<->")
+        .replace(/\u00F7/g, "/")
+        .replace(/\u00D7/g, "x")
+        .replace(/\u27F9|\u21D2/g, "=>")
+        .replace(/\u00B7/g, "");
+    }
+    function ensureSpace(h){
+      if (y + h > pageH - margin){ doc.addPage(); y = margin; }
+    }
+    function mono(size, color){
+      doc.setFont("helvetica","normal"); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK);
+    }
+    function monoGrid(size, color){
+      doc.setFont("courier","normal"); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK);
+    }
+    function line(text, x, opts){
+      ensureSpace(14.4);
+      mono(12, INK);
+      doc.text(asciiClean(text), x !== undefined ? x : margin, y, opts);
+      y += 14.4;
+    }
+    function linePrompt(text, x, opts){
+      ensureSpace(14.4);
+      monoGrid(12, INK);
+      doc.text(asciiClean(text), x !== undefined ? x : margin, y, opts);
+      y += 14.4;
+    }
+    function blank(h){ y += (h || 9); }
+    function drawScMatrix(mtx, augAt){
+      var rows = scMatrixLines(mtx, augAt);
+      ensureSpace(rows.length*14.4 + 4);
+      monoGrid(12, INK);
+      rows.forEach(function(r){ doc.text(asciiClean("    "+r), margin, y); y += 14.4; });
+      blank(11);
+    }
+
+    // cabeçalho de identificação, em formato de comentário de código
+    if (state.headerOn){
+      var today = new Date();
+      var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+      mono(12, INK);
+      var rule = "// "+Array(64).join("-");
+      line(rule);
+      line("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
+      line("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
+      line("// Professora: Lucélia Radin");
+      line("// Aluno(a): "+(state.headerName || "_________________________"));
+      line("// Data: "+dateStr);
+      line(rule);
+      blank(11);
+    }
+
+    // "Questão" — mesmo lugar, mas discreto, como um comentário no script
+    var questionTitle = state.headerQuestion ? ("Questão " + state.headerQuestion) : "Questão";
+    mono(12, INK);
+    line("// "+questionTitle);
+    blank(7);
+
+    if (lastComputation.method === "gauss"){
+      var todos = lastComputation.steps;
+      linePrompt("-->A");
+      drawScMatrix(todos[0].matrix, state.cols);
+      todos.slice(1).forEach(function(s){
+        if (s.type === "skip") return;
+        if (s.type === "final") return;
+        line(scDesc(s));
+        drawScMatrix(s.matrix, state.cols);
+      });
+      line('disp("RESULTADO:")');
+      line("RESULTADO:");
+      var last = todos[todos.length-1];
+      drawScMatrix(last.matrix, state.cols);
+      var n = last.matrix.length, m = state.cols;
+      blank(4);
+      mono(9.5, SOFT);
+      line("// Solução:");
+      mono(10, INK);
+      for (var i=0;i<Math.min(n,m);i++) line("//   x"+(i+1)+" = "+fmt(last.matrix[i][m]));
+    } else if (lastComputation.method === "lu"){
+      var lu = lastComputation.run;
+      linePrompt("-->A");
+      drawScMatrix(lu.A);
+      lu.etapas.forEach(function(e){
+        blank(4);
+        line("// Etapa "+e.k+" — pivo a"+e.k+e.k+" = "+fmt(e.pivo));
+        e.mults.forEach(function(mm){
+          line("L"+mm.i+" -> L"+mm.i+" - m"+mm.i+mm.k+"*L"+mm.k+"   m"+mm.i+mm.k+" = "+fmt(mm.m));
+        });
+        drawScMatrix(e.matrix);
+      });
+      if (lu.falhou){
+        mono(9.5, INK);
+        line(lu.falhou);
+      } else {
+        linePrompt("-->L");
+        drawScMatrix(lu.L);
+        blank(4);
+        linePrompt("-->U");
+        drawScMatrix(lu.U);
+        blank(4);
+        linePrompt("-->L*U   // conferencia: deve reproduzir A");
+        drawScMatrix(lu.LU);
+        blank(4);
+        line("// L*y = b  (substituicao para frente)");
+        lu.yDetail.forEach(function(d){ line(scLuForward(d)); });
+        blank(6);
+        line("// U*x = y  (substituicao para tras)");
+        lu.xDetail.slice().reverse().forEach(function(d){ line(scLuBack(d)); });
+        blank(6);
+        mono(9.5, SOFT);
+        line("// Solução:");
+        mono(10, INK);
+        for (var li=0; li<lu.n; li++) line("//   x"+(li+1)+" = "+fmt(lu.x[li]));
+      }
+    } else {
+      var run = lastComputation.run;
+      line("inicio = "+state.inicio+";   num_interacoes = "+run.iterations.length+";");
+      blank(6);
+      run.iterations.forEach(function(it){
+        line("// Iteração "+(it.k+1));
+        it.detail.forEach(function(d){ line(scJacobiFormula(d)); });
+        blank(6);
+      });
+      var lastX = run.historico[run.historico.length-1];
+      mono(9.5, SOFT);
+      line("// Resultado após "+run.iterations.length+" iteracoes:");
+      mono(10, INK);
+      for (var vi=0; vi<run.n; vi++) line("//   x"+(vi+1)+" = "+fmt(lastX[vi]));
+      if (lastComputation.diagWarn){
+        blank(6);
+        mono(9, INK);
+        line("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
+      }
+    }
+
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var pg=1; pg<=pageCount; pg++){
+      doc.setPage(pg);
+      mono(9, SOFT);
+      doc.text(String(pg)+" / "+pageCount, pageW-margin, pageH-20, {align:"right"});
+    }
+
+    return doc;
+  }
+
+  async function downloadScilabPdf(){
+    var doc = buildScilabPdf();
+    if (!doc) return;
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : "jacobi");
+    var filename = nomeMetodo + "-scilab.pdf";
+    var blob = doc.output("blob");
+    try{
+      var downloads = await claude.use("downloads");
+      if (downloads){
+        try{
+          await downloads.save({filename: filename, data: blob});
+          return;
+        }catch(err){
+          if (err && err.code === "declined") return;
+        }
+      }
+    }catch(e){ /* capability not available — fall back below */ }
+
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+
+  document.getElementById("btnPdfScilab").addEventListener("click", downloadScilabPdf);
+
+  // ---------- versão "impressão do SciNotes" ----------
+  // Mesmo texto/processo do modo Scilab acima, mas no template do editor:
+  // numeração de linha à esquerda (0001, 0002...), sem prompts "-->" nem
+  // ecoar chamadas como disp(...) — só o conteúdo (comentários, matrizes,
+  // fórmulas), como se tivesse sido impresso pelo próprio SciNotes.
+  function buildScinotesPdf(){
+    if (!lastComputation) return;
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({unit:"pt", format:"a4"});
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 72; // 25.4mm = 1in, igual à Config. de Página padrão do Scilab
+    var gutter = 30;
+    var y = margin;
+    var lineNo = 1;
+    var INK = [20,20,20], SOFT = [130,130,130], GREEN = [0,128,0];
+
+    function asciiClean(s){
+      return String(s)
+        .replace(/[\u2212\u2013\u2014]/g, "-")
+        .replace(/\u2192/g, "->")
+        .replace(/\u2194/g, "<->")
+        .replace(/\u00F7/g, "/")
+        .replace(/\u00D7/g, "x")
+        .replace(/\u27F9|\u21D2/g, "=>")
+        .replace(/\u00B7/g, "");
+    }
+    function ensureSpace(h){
+      if (y + h > pageH - margin){ doc.addPage(); y = margin; }
+    }
+    function mono(size, color){
+      doc.setFont("courier","normal"); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK);
+    }
+    // cada linha visível ganha um número sequencial, igual à numeração de um
+    // arquivo aberto no SciNotes — inclusive linhas em branco contam.
+    // comentários (//) saem em verde, igual à colorização padrão do editor.
+    function line(text){
+      ensureSpace(13);
+      mono(9.5, SOFT);
+      doc.text(String(lineNo).padStart(4,"0"), margin, y);
+      if (text){
+        var isComment = /^\s*\/\//.test(text);
+        mono(9.5, isComment ? GREEN : INK);
+        doc.text(asciiClean(text), margin+gutter, y);
+      }
+      y += 13;
+      lineNo++;
+    }
+    function blank(){ line(""); }
+    function drawScMatrix(mtx, augAt){
+      var rows = scMatrixLines(mtx, augAt);
+      ensureSpace(rows.length*13 + 4);
+      rows.forEach(function(r){ line("    "+r); });
+    }
+
+    if (state.headerOn){
+      var today = new Date();
+      var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+      var rule = "// "+Array(64).join("-");
+      line(rule);
+      line("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
+      line("// Disciplina: Calculo Numerico          Curso: Engenharia Civil");
+      line("// Professora: Lucelia Radin");
+      line("// Aluno(a): "+(state.headerName || "_________________________"));
+      line("// Data: "+dateStr);
+      line(rule);
+      blank();
+    }
+
+    var questionTitle = state.headerQuestion ? ("Questao " + state.headerQuestion) : "Questao";
+    line("// "+questionTitle);
+    blank();
+
+    if (lastComputation.method === "gauss"){
+      var todos = lastComputation.steps;
+      line("// Matriz A");
+      drawScMatrix(todos[0].matrix, state.cols);
+      todos.slice(1).forEach(function(s){
+        if (s.type === "skip") return;
+        if (s.type === "final") return;
+        blank();
+        line(scDesc(s));
+        drawScMatrix(s.matrix, state.cols);
+      });
+      blank();
+      line("// RESULTADO");
+      var last = todos[todos.length-1];
+      drawScMatrix(last.matrix, state.cols);
+      var n = last.matrix.length, m = state.cols;
+      blank();
+      line("// solucao:");
+      for (var i=0;i<Math.min(n,m);i++) line("//   x"+(i+1)+" = "+fmt(last.matrix[i][m]));
+    } else if (lastComputation.method === "lu"){
+      var lu = lastComputation.run;
+      line("// Matriz A");
+      drawScMatrix(lu.A);
+      lu.etapas.forEach(function(e){
+        blank();
+        e.mults.forEach(function(mm){
+          line("m"+mm.i+mm.k+" = "+fmt(mm.m));
+        });
+        drawScMatrix(e.matrix);
+      });
+      if (lu.falhou){
+        blank();
+        line(lu.falhou);
+      } else {
+        blank();
+        line("// Matriz L");
+        drawScMatrix(lu.L);
+        blank();
+        line("// Matriz U");
+        drawScMatrix(lu.U);
+        blank();
+        line("// L*U — conferencia: deve reproduzir A");
+        drawScMatrix(lu.LU);
+        blank();
+        line("// L*y = b  (substituicao para frente)");
+        lu.yDetail.forEach(function(d){ line(scLuForward(d)); });
+        blank();
+        line("// U*x = y  (substituicao para tras)");
+        lu.xDetail.slice().reverse().forEach(function(d){ line(scLuBack(d)); });
+        blank();
+        line("// solucao:");
+        for (var li=0; li<lu.n; li++) line("//   x"+(li+1)+" = "+fmt(lu.x[li]));
+      }
+    } else {
+      var run = lastComputation.run;
+      line("// inicio = "+state.inicio+"   num_interacoes = "+run.iterations.length);
+      blank();
+      run.iterations.forEach(function(it){
+        line("// iteracao "+(it.k+1));
+        it.detail.forEach(function(d){ line(scJacobiFormula(d)); });
+        blank();
+      });
+      var lastX = run.historico[run.historico.length-1];
+      line("// resultado apos "+run.iterations.length+" iteracoes:");
+      for (var vi=0; vi<run.n; vi++) line("//   x"+(vi+1)+" = "+fmt(lastX[vi]));
+      if (lastComputation.diagWarn){
+        blank();
+        line("// atencao: elemento zero na diagonal principal de A — convergencia nao garantida.");
+      }
+    }
+
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var pg=1; pg<=pageCount; pg++){
+      doc.setPage(pg);
+      mono(8, SOFT);
+      doc.text(String(pg)+" / "+pageCount, pageW-margin, pageH-20, {align:"right"});
+    }
+
+    return doc;
+  }
+
+  async function downloadScinotesPdf(){
+    var doc = buildScinotesPdf();
+    if (!doc) return;
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : "jacobi");
+    var filename = nomeMetodo + "-scinotes.pdf";
+    var blob = doc.output("blob");
+    try{
+      var downloads = await claude.use("downloads");
+      if (downloads){
+        try{
+          await downloads.save({filename: filename, data: blob});
+          return;
+        }catch(err){
+          if (err && err.code === "declined") return;
+        }
+      }
+    }catch(e){ /* capability not available — fall back below */ }
+
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  }
+
+  document.getElementById("btnPdfScinotes").addEventListener("click", downloadScinotesPdf);
+
+  // ---------- Código Scilab (.sce) — script real pra rodar no Scilab ----------
+  function fmtScilab(v){
+    if (!isFinite(v)) return "0";
+    var r = Math.round(v*1e6)/1e6;
+    if (Object.is(r, -0)) r = 0;
+    return r.toString();
+  }
+  function matrixToScilab(mtx){
+    return "[" + mtx.map(function(row){ return row.map(fmtScilab).join(" "); }).join(";\n     ") + "]";
+  }
+  function vectorToScilabCol(vec){
+    return "[" + vec.map(fmtScilab).join("; ") + "]";
+  }
+
+  var SCE_HEADER = "// Gerado pelo Resolvedor de Cálculo Numérico\n" +
+    "// Cole no SciNotes e rode (F5, ou selecione tudo e mande executar).\n" +
+    "// Usa só funções nativas do Scilab — nenhuma toolbox/lib extra é necessária.\n\n";
+
+  function buildScilabCodeGauss(){
+    var A = matrixToScilab(state.A);
+    return SCE_HEADER +
+"A = "+A+";\n\n"+
+"n = size(A,1);\n"+
+"m = size(A,2) - 1; // número de incógnitas\n\n"+
+"linha = 1;\n"+
+"for coluna = 1:m\n"+
+"    p = 0;\n"+
+"    for i = linha:n\n"+
+"        if abs(A(i,coluna)) > 1e-9 then\n"+
+"            p = i;\n"+
+"            break;\n"+
+"        end\n"+
+"    end\n"+
+"    if p == 0 then\n"+
+"        mprintf(\"Coluna %d nula — nenhum pivô possível.\\n\", coluna);\n"+
+"        continue;\n"+
+"    end\n"+
+"    if p <> linha then\n"+
+"        tmp = A(linha,:); A(linha,:) = A(p,:); A(p,:) = tmp;\n"+
+"        mprintf(\"L%d <-> L%d\\n\", linha, p);\n"+
+"        disp(A);\n"+
+"    end\n"+
+"    valor = A(linha,coluna);\n"+
+"    if abs(valor - 1) > 1e-9 then\n"+
+"        A(linha,:) = A(linha,:) / valor;\n"+
+"        mprintf(\"L%d -> L%d / %g\\n\", linha, linha, valor);\n"+
+"        disp(A);\n"+
+"    end\n"+
+"    for i = 1:n\n"+
+"        if i <> linha then\n"+
+"            c = A(i,coluna);\n"+
+"            if abs(c) > 1e-9 then\n"+
+"                A(i,:) = A(i,:) - c * A(linha,:);\n"+
+"                mprintf(\"L%d -> L%d - (%g)*L%d\\n\", i, i, c, linha);\n"+
+"                disp(A);\n"+
+"            end\n"+
+"        end\n"+
+"    end\n"+
+"    linha = linha + 1;\n"+
+"    if linha > n then break; end\n"+
+"end\n\n"+
+"mprintf(\"\\nSolução (forma escalonada reduzida):\\n\");\n"+
+"disp(A);\n"+
+"for i = 1:min(n,m)\n"+
+"    mprintf(\"x%d = %g\\n\", i, A(i,m+1));\n"+
+"end\n";
+  }
+
+  function buildScilabCodeJacobi(){
+    var A = matrixToScilab(state.A);
+    var b = vectorToScilabCol(state.b);
+    return SCE_HEADER +
+"A = "+A+";\n"+
+"b = "+b+";\n"+
+"n = size(A,1);\n"+
+"x = zeros(n,1) + "+fmtScilab(state.inicio)+"; // chute inicial\n"+
+"numIter = "+state.numIter+";\n\n"+
+"for k = 1:numIter\n"+
+"    X = zeros(n,1);\n"+
+"    for i = 1:n\n"+
+"        soma = 0;\n"+
+"        for j = 1:n\n"+
+"            if j <> i then\n"+
+"                soma = soma + A(i,j)*x(j);\n"+
+"            end\n"+
+"        end\n"+
+"        X(i) = (b(i) - soma) / A(i,i);\n"+
+"    end\n"+
+"    x = X;\n"+
+"    mprintf(\"Iteração %d:\\n\", k);\n"+
+"    disp(x');\n"+
+"end\n\n"+
+"mprintf(\"\\nResultado após %d iterações:\\n\", numIter);\n"+
+"for i = 1:n\n"+
+"    mprintf(\"x%d = %g\\n\", i, x(i));\n"+
+"end\n";
+  }
+
+  function buildScilabCodeLu(){
+    var lu = lastComputation && lastComputation.run;
+    if (!lu) return "";
+    var code = SCE_HEADER;
+    code += "A = "+matrixToScilab(lu.A)+";\n";
+    code += "b = "+vectorToScilabCol(lu.b)+";\n";
+    code += "n = "+lu.n+";\n";
+    code += "L = eye(n,n);\n\n";
+
+    lu.etapas.forEach(function(e){
+      code += "// Etapa "+e.k+" — pivo a"+e.k+e.k+" = "+fmt(e.pivo)+"\n";
+      e.mults.forEach(function(mm){
+        code += "// L"+mm.i+" -> L"+mm.i+" - m"+mm.i+mm.k+"*L"+mm.k+"   m"+mm.i+mm.k+" = "+fmt(mm.m)+"\n";
+        code += "L("+mm.i+","+mm.k+") = "+fmtScilab(mm.m)+";\n";
+        code += "A("+mm.i+",:) = A("+mm.i+",:) - "+fmtScilab(mm.m)+"*A("+mm.k+",:);\n";
+      });
+      code += "disp(A);\n\n";
+    });
+
+    code += "U = A;\n\n";
+    code += "mprintf(\"L =\\n\"); disp(L);\n";
+    code += "mprintf(\"U =\\n\"); disp(U);\n\n";
+
+    code += "// L*y = b (substituicao para frente)\n";
+    code += "y = zeros(n,1);\n";
+    lu.yDetail.forEach(function(d){
+      code += "// "+scLuForward(d)+"\n";
+      code += "y("+d.i+") = "+fmtScilab(d.result)+";\n";
+    });
+    code += "\n";
+
+    code += "// U*x = y (substituicao para tras)\n";
+    code += "x = zeros(n,1);\n";
+    lu.xDetail.slice().reverse().forEach(function(d){
+      code += "// "+scLuBack(d)+"\n";
+      code += "x("+d.i+") = "+fmtScilab(d.result)+";\n";
+    });
+    code += "\n";
+
+    code += "mprintf(\"\\nSolucao do sistema:\\n\");\n";
+    for (var li=0; li<lu.n; li++){
+      code += "mprintf(\"x"+(li+1)+" = %g\\n\", x("+(li+1)+"));\n";
+    }
+    return code;
+  }
+
+  function buildScilabCode(){
+    if (!lastComputation) return "";
+    if (state.method === "gauss") return buildScilabCodeGauss();
+    if (state.method === "lu") return buildScilabCodeLu();
+    return buildScilabCodeJacobi();
+  }
+
+  var scilabModalEl = document.getElementById("scilabModal");
+  var scilabCodeAreaEl = document.getElementById("scilabCodeArea");
+
+  function openScilabModal(){
+    var code = buildScilabCode();
+    if (!code) return;
+    scilabCodeAreaEl.value = code;
+    scilabModalEl.classList.add("open");
+  }
+  function closeScilabModal(){ scilabModalEl.classList.remove("open"); }
+
+  document.getElementById("btnScilabCode").addEventListener("click", openScilabModal);
+  document.getElementById("scilabModalClose").addEventListener("click", closeScilabModal);
+  scilabModalEl.addEventListener("click", function(e){ if (e.target === scilabModalEl) closeScilabModal(); });
+
+  document.getElementById("btnScilabCopy").addEventListener("click", async function(){
+    var btn = this;
+    try{
+      await navigator.clipboard.writeText(scilabCodeAreaEl.value);
+    }catch(e){
+      scilabCodeAreaEl.select();
+      try{ document.execCommand("copy"); }catch(e2){ /* ignore */ }
+    }
+    var original = btn.textContent;
+    btn.textContent = "Copiado!";
+    setTimeout(function(){ btn.textContent = original; }, 1500);
+  });
+
+  document.getElementById("btnScilabDownload").addEventListener("click", async function(){
+    var nomeMetodo = state.method === "gauss" ? "gauss-jordan" : state.method === "lu" ? "fatoracao-lu" : "jacobi";
+    var filename = nomeMetodo + ".sce";
+    var blob = new Blob([scilabCodeAreaEl.value], {type:"text/plain"});
+    try{
+      var downloads = await claude.use("downloads");
+      if (downloads){
+        var res = await downloads.save({filename: filename, data: blob});
+        if (res) return;
+      }
+    }catch(e){ /* fallback abaixo */ }
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  });
+
+  // ---------- read matrix from an image ----------
+  var imgHintEl, imgBtnEl, imgInputEl;
+
+  function imgErrorCopy(code){
+    switch(code){
+      case "not_granted": return "Permissão de leitura de imagem não concedida.";
+      case "images_unavailable": return "Este visualizador não aceita imagens aqui.";
+      case "image_rejected": return "Não deu pra ler esse arquivo — tenta outra foto ou print.";
+      case "rate_limited": return "Muitas tentativas seguidas — espera um pouco e tenta de novo.";
+      case "invalid_json": return "Não consegui separar os números direito — tenta um print mais nítido.";
+      case "refused": return "Não consegui processar essa imagem.";
+      case "session_expired": return "Sua sessão expirou — recarregue a página.";
+      default: return "Não consegui ler a imagem agora — tenta de novo.";
+    }
+  }
+
+  async function handleImageFile(file){
+    if (!file || !imgHintEl) return;
+    var sample = await claude.use("sample").catch(function(){ return null; });
+    if (!sample){ imgHintEl.textContent = "Leitura de imagem indisponível aqui."; return; }
+
+    imgBtnEl.disabled = true;
+    var prevHint = imgHintEl.textContent;
+    imgHintEl.style.color = "var(--ink-faint)";
+    imgHintEl.textContent = "Lendo a imagem...";
+
+    var prompt;
+    if (state.method === "gauss"){
+      prompt = "A imagem mostra a matriz aumentada [A|b] de um sistema linear (impressa, escrita a mao, ou print de tela/planilha/Scilab). "
+        + "Leia os numeros exatamente como aparecem (decimais com ponto, negativos com sinal de menos). "
+        + "Responda APENAS com um JSON no formato exato: "
+        + '{"rows": <numero de linhas>, "cols": <numero de incognitas, ou seja, colunas SEM contar a ultima que e o termo independente b>, "matrix": [[...linha 1 com cols+1 numeros...], [...]]}. '
+        + "Cada linha de 'matrix' deve ter exatamente cols+1 numeros: os coeficientes seguidos do termo independente. Nao inclua texto fora do JSON.";
+    } else {
+      prompt = "A imagem mostra uma matriz quadrada A e um vetor b de um sistema linear A*x=b (impressos, escritos a mao, ou print de tela/planilha/Scilab). "
+        + "Leia os numeros exatamente como aparecem (decimais com ponto, negativos com sinal de menos). "
+        + "Responda APENAS com um JSON no formato exato: "
+        + '{"n": <tamanho da matriz>, "A": [[...linha 1 com n numeros...], [...]], "b": [...n numeros do vetor b...]}. '
+        + "Nao inclua texto fora do JSON.";
+    }
+
+    try{
+      var data = await sample.json(prompt, {images: file, modelTier: "default"});
+      applyImageResult(data);
+      imgHintEl.style.color = "var(--teal)";
+      imgHintEl.textContent = "Matriz preenchida a partir da imagem — confira os números antes de continuar.";
+    }catch(e){
+      imgHintEl.style.color = "var(--danger)";
+      imgHintEl.textContent = imgErrorCopy(e && e.code);
+    }finally{
+      imgBtnEl.disabled = false;
+    }
+  }
+
+  function applyImageResult(data){
+    if (state.method === "gauss"){
+      if (!data || !Array.isArray(data.matrix) || !data.matrix.length || !Array.isArray(data.matrix[0])){
+        throw {code:"invalid_json"};
+      }
+      var rows = Math.max(2, Math.min(8, data.matrix.length));
+      var cols = Math.max(1, Math.min(7, data.matrix[0].length - 1));
+      state.rows = rows; state.cols = cols;
+      state.A = data.matrix.slice(0, rows).map(function(r){ return r.slice(0, cols+1).map(function(v){ return Number(v) || 0; }); });
+      document.getElementById("rowsVal").textContent = state.rows;
+      document.getElementById("colsVal").textContent = state.cols;
+    } else {
+      var n0 = data && (data.n || (Array.isArray(data.A) && data.A.length));
+      if (!data || !Array.isArray(data.A) || !n0) throw {code:"invalid_json"};
+      var n = Math.max(2, Math.min(7, n0));
+      state.jn = n;
+      state.A = data.A.slice(0, n).map(function(r){ return (r||[]).slice(0, n).map(function(v){ return Number(v) || 0; }); });
+      var bArr = Array.isArray(data.b) ? data.b : [];
+      state.b = []; for (var i=0;i<n;i++) state.b.push(Number(bArr[i]) || 0);
+      document.getElementById("colsVal").textContent = state.jn;
+    }
+    buildEditor(); render(); saveLocal();
+  }
+
+  async function setupImageReader(){
+    imgHintEl = document.getElementById("imgHint");
+    imgBtnEl = document.getElementById("btnImage");
+    imgInputEl = document.getElementById("imgInput");
+    var row = document.getElementById("aiImgRow");
+    try{
+      var sample = await claude.use("sample");
+      if (!sample){ return; }
+      var limits = await sample.limits();
+      if (!limits || !limits.images){ return; }
+      if (limits.images.mediaTypes && limits.images.mediaTypes.length) imgInputEl.accept = limits.images.mediaTypes.join(",");
+      row.style.display = "block";
+    }catch(e){ /* no image support in this view — keep hidden */ }
+  }
+
+  document.getElementById("btnImage").addEventListener("click", function(){
+    document.getElementById("imgInput").click();
+  });
+  document.getElementById("imgInput").addEventListener("change", function(){
+    var f = this.files && this.files[0];
+    this.value = "";
+    if (f) handleImageFile(f);
+  });
+  setupImageReader();
+
+  // ---------- read matrix from an image: local OCR (Tesseract.js) ----------
+  var ocrHintEl = document.getElementById("ocrHint");
+  var ocrBtnEl = document.getElementById("btnOcr");
+
+  function parseMatrixFromOcrText(text){
+    var lines = text.split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+    var rows = [];
+    lines.forEach(function(line){
+      var nums = line.match(/-?\d+(?:[.,]\d+)?/g);
+      if (nums && nums.length) rows.push(nums.map(function(n){ return parseFloat(n.replace(",", ".")); }));
+    });
+    return rows;
+  }
+
+  function applyOcrRows(rows){
+    var maxLen = rows.reduce(function(m,r){ return Math.max(m, r.length); }, 0);
+    rows = rows.map(function(r){ r = r.slice(0, maxLen); while (r.length < maxLen) r.push(0); return r; });
+
+    if (state.method === "gauss"){
+      var rCount = Math.max(2, Math.min(8, rows.length));
+      var cCount = Math.max(1, Math.min(7, maxLen-1));
+      state.rows = rCount; state.cols = cCount;
+      state.A = rows.slice(0, rCount).map(function(r){ return r.slice(0, cCount+1); });
+      document.getElementById("rowsVal").textContent = state.rows;
+      document.getElementById("colsVal").textContent = state.cols;
+    } else {
+      var n, hasB = (maxLen === rows.length + 1);
+      n = Math.max(2, Math.min(7, rows.length));
+      state.jn = n;
+      state.A = rows.slice(0, n).map(function(r){ return r.slice(0, n); });
+      state.b = hasB ? rows.slice(0, n).map(function(r){ return r[n]; }) : new Array(n).fill(0);
+      document.getElementById("colsVal").textContent = state.jn;
+    }
+    buildEditor(); render(); saveLocal();
+  }
+
+  async function handleOcrFile(file){
+    if (!file) return;
+    ocrBtnEl.disabled = true;
+    ocrHintEl.style.color = "var(--ink-faint)";
+    ocrHintEl.textContent = "Lendo com OCR... pode levar alguns segundos, principalmente na primeira vez.";
+    try{
+      if (!window.Tesseract) throw new Error("Tesseract.js não carregou");
+      var worker = await Tesseract.createWorker("eng");
+      await worker.setParameters({ tessedit_char_whitelist: "0123456789.,- \n", tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+      var result = await worker.recognize(file);
+      await worker.terminate();
+      var rows = parseMatrixFromOcrText(result.data.text);
+      if (!rows.length) throw new Error("nenhum número reconhecido");
+      applyOcrRows(rows);
+      ocrHintEl.style.color = "var(--teal)";
+      ocrHintEl.textContent = "Matriz lida por OCR — confira todos os números.";
+    }catch(e){
+      ocrHintEl.style.color = "var(--danger)";
+      ocrHintEl.textContent = "Não consegui ler essa imagem por OCR. Tenta um print bem nítido e alinhado em grade, ou usa a leitura por IA se estiver dentro do link publicado.";
+    }finally{
+      ocrBtnEl.disabled = false;
+    }
+  }
+
+  document.getElementById("btnOcr").addEventListener("click", function(){
+    document.getElementById("ocrInput").click();
+  });
+  document.getElementById("ocrInput").addEventListener("change", function(){
+    var f = this.files && this.files[0];
+    this.value = "";
+    if (f) handleOcrFile(f);
+  });
+
+  // ---------- colar imagem (Ctrl+V) em qualquer lugar da página ----------
+  document.addEventListener("paste", function(e){
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    var imgItem = null;
+    for (var i=0;i<items.length;i++){
+      if (items[i].type && items[i].type.indexOf("image") === 0){ imgItem = items[i]; break; }
+    }
+    if (!imgItem) return;
+    e.preventDefault();
+    var file = imgItem.getAsFile();
+    if (!file) return;
+    var aiAvailable = document.getElementById("aiImgRow").style.display !== "none";
+    if (aiAvailable) handleImageFile(file); else handleOcrFile(file);
+  });
+
+  // ---------- boot ----------
+  function boot(){
+    var restored = loadLocal();
+    if (!restored){
+      state.A = mk(state.rows, state.cols+1, 0);
+      state.b = [];
+    } else {
+      // keep loaded state but make sure arrays are consistent sizes
+      if (state.method === "gauss") { state.A = state.A && state.A.length ? state.A : mk(state.rows, state.cols+1, 0); }
+      else { state.A = state.A && state.A.length ? state.A : mk(state.jn, state.jn, 0); state.b = state.b || new Array(state.jn).fill(0); }
+    }
+    document.querySelectorAll(".method-opt").forEach(function(el){
+      el.classList.toggle("active", el.dataset.method === state.method);
+    });
+    document.querySelector('input[name="method"][value="'+state.method+'"]').checked = true;
+    document.getElementById("jacobiParams").style.display = state.method === "jacobi" ? "flex" : "none";
+    document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
+    document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
+    document.getElementById("rowsVal").textContent = state.rows;
+    document.getElementById("colsVal").textContent = state.method === "gauss" ? state.cols : state.jn;
+    document.getElementById("numIter").value = state.numIter;
+    document.getElementById("tolInput").value = state.tolerance !== undefined ? state.tolerance : 0.001;
+    var sm = state.stopMode || "iter";
+    document.querySelectorAll("input[name='stopMode']").forEach(function(r){ r.checked = r.value === sm; });
+    document.getElementById("fieldNumIter").style.display = sm === "iter" ? "" : "none";
+    document.getElementById("fieldTolerance").style.display = sm === "tol" ? "" : "none";
+    document.querySelectorAll("#inicioToggle button").forEach(function(b){ b.classList.toggle("active", parseInt(b.dataset.v,10) === state.inicio); });
+    chkHeaderEl.checked = !!state.headerOn;
+    headerFieldsEl.style.display = state.headerOn ? "block" : "none";
+    headerNameEl.value = state.headerName || "";
+    headerQuestionEl.value = state.headerQuestion || "";
+    buildEditor();
+    render();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
