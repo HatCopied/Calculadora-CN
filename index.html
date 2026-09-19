@@ -126,8 +126,38 @@
     .method-opt.active{ padding-top: 8px; }
     .method-opt .mo-text b{ font-size: 11.5px; white-space:nowrap; }
   }
-  .layout{ margin-top: 10px; display:grid; grid-template-columns: 248px 1fr; gap: 16px; align-items:start; }
-  @media (max-width: 860px){ .layout{ grid-template-columns: 1fr; } }
+  /* 3 colunas: downloads | matriz + passos | questões salvas */
+  .layout{ margin-top: 10px; display:grid; grid-template-columns: 248px minmax(0,1fr) 244px; gap: 16px; align-items:start; }
+  @media (max-width: 1180px){
+    /* telas médias: a coluna das questões desce pra baixo dos downloads */
+    .layout{ grid-template-columns: 248px minmax(0,1fr); }
+    .layout .sidebar{ grid-column:1; grid-row:1; }
+    .layout .aside{ grid-column:1; grid-row:2; }
+    .layout .main{ grid-column:2; grid-row:1 / span 2; }
+  }
+  @media (max-width: 860px){
+    .layout{ grid-template-columns: minmax(0,1fr); }
+    .layout .sidebar, .layout .aside, .layout .main{ grid-column:1; grid-row:auto; }
+  }
+
+  /* Faixa slim de leitura de print (OCR / IA), no topo */
+  .ocr-strip{
+    display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:6px 8px;
+    margin-left:auto; max-width:100%; padding:5px 8px 5px 11px;
+    border:1px dashed var(--line); border-radius: var(--radius); background: var(--paper-raised);
+  }
+  .ocr-note{ font-size:12px; color:var(--ink-soft); }
+  .ocr-note kbd{
+    font-family:"JetBrains Mono"; font-size:11px; padding:1px 5px; border:1px solid var(--line);
+    border-radius:3px; background: var(--paper); color: var(--ink);
+  }
+  .ocr-strip .btn{ width:auto; padding:5px 11px; font-size:12.5px; }
+  .ocr-strip .hint{ flex-basis:100%; margin:0; text-align:right; }
+  .ocr-strip .hint:empty{ display:none; }
+  @media (max-width: 560px){
+    .ocr-strip{ margin-left:0; width:100%; justify-content:flex-start; }
+    .ocr-strip .hint{ text-align:left; }
+  }
 
   /* Config compacta da matriz, ao lado da grade de números */
   .matrix-panel-body{ display:flex; gap: 20px; align-items:flex-start; flex-wrap:wrap; }
@@ -207,10 +237,6 @@
     background: var(--teal-tint); color: var(--teal); border: 1px solid var(--teal);
   }
   .btn.ghost.btn-scilab:hover{ filter: brightness(1.05); border-color: var(--teal); color: var(--teal); }
-  .btn.ghost.btn-scinotes{
-    background: var(--danger-tint); color: var(--danger); border: 1px solid var(--danger);
-  }
-  .btn.ghost.btn-scinotes:hover{ filter: brightness(1.05); border-color: var(--danger); color: var(--danger); }
   .btn.ghost.btn-scicode{
     background: var(--brass-tint); color: var(--brass-deep); border: 1px solid var(--brass);
   }
@@ -321,6 +347,25 @@
 
   footer.foot{ margin-top: 34px; text-align:center; color: var(--ink-faint); font-size: 11.5px; }
 
+  /* Questões salvas (várias questões num PDF só) */
+  .saved-list{ display:flex; flex-direction:column; gap:6px; }
+  .saved-item{
+    display:flex; align-items:center; gap:8px; padding:7px 6px 7px 10px;
+    border:1px solid var(--line); border-radius: var(--radius); background: var(--paper);
+  }
+  .saved-txt{ flex:1; min-width:0; }
+  .saved-title{
+    font-family:"JetBrains Mono"; font-size:12.5px; color:var(--ink);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .saved-sub{ font-size:11px; color:var(--ink-faint); margin-top:1px; }
+  .saved-x{
+    border:none; background:transparent; color:var(--ink-faint); font-size:18px; line-height:1;
+    cursor:pointer; padding:3px 8px; border-radius: var(--radius);
+  }
+  .saved-x:hover{ color:var(--danger); background:var(--danger-tint); }
+  .saved-lead{ font-size:12px; color:var(--ink-soft); margin:12px 0 6px; }
+
   ::selection{ background: var(--brass-tint); }
   a{ color: var(--brass-deep); }
 
@@ -338,6 +383,17 @@
       <div class="mark"><span class="num">CN·01</span></div>
       <h1>Resolvedor de Sistemas — Cálculo Numérico</h1>
     </div>
+    <div class="ocr-strip" id="imgPanel">
+      <span class="ocr-note">Cole um print com <kbd>Ctrl</kbd>+<kbd>V</kbd> ou</span>
+      <input type="file" id="ocrInput" accept="image/*" style="display:none;">
+      <button class="btn ghost" id="btnOcr" type="button" title="Lê a matriz de uma imagem direto no navegador (funciona no arquivo baixado)">🔎 Ler com OCR</button>
+      <div id="aiImgRow" style="display:none;">
+        <input type="file" id="imgInput" accept="image/*" style="display:none;">
+        <button class="btn ghost" id="btnImage" type="button" title="Leitura por IA — mais precisa, costuma acertar até foto de caderno">📷 Ler com IA</button>
+      </div>
+      <div class="hint" id="ocrHint"></div>
+      <div class="hint" id="imgHint"></div>
+    </div>
   </header>
 
   <div class="method-switch method-tabs" id="methodSwitch">
@@ -349,6 +405,10 @@
       <input type="radio" name="method" value="jacobi">
       <span class="mo-text"><b>Método de Jacobi</b></span>
     </label>
+    <label class="method-opt" data-method="seidel">
+      <input type="radio" name="method" value="seidel">
+      <span class="mo-text"><b>Gauss-Seidel</b></span>
+    </label>
     <label class="method-opt" data-method="lu">
       <input type="radio" name="method" value="lu">
       <span class="mo-text"><b>Fatoração LU</b></span>
@@ -359,42 +419,6 @@
 
     <!-- SIDEBAR -->
     <div class="sidebar">
-      <div class="panel" id="imgPanel">
-        <div class="panel-head">LER DE UM PRINT <span style="font-weight:400; color:var(--ink-faint); text-transform:none;">(ou cole com Ctrl+V)</span></div>
-        <div class="panel-body">
-          <input type="file" id="ocrInput" accept="image/*" style="display:none;">
-          <button class="btn ghost" id="btnOcr" type="button">🔎 Ler com OCR (funciona no arquivo baixado)</button>
-          <div class="hint" id="ocrHint"></div>
-
-          <div id="aiImgRow" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line);">
-            <input type="file" id="imgInput" accept="image/*" style="display:none;">
-            <button class="btn ghost" id="btnImage" type="button">📷 Ler com IA (mais precisa)</button>
-            <div class="hint" id="imgHint">Só funciona dentro deste link publicado (não no arquivo baixado), mas costuma acertar até em foto de caderno.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel" id="headerPanel">
-        <div class="panel-head">CABEÇALHO DO PDF</div>
-        <div class="panel-body">
-          <div class="stack-field">
-            <label for="headerQuestion">Questão (título do PDF)</label>
-            <input type="text" class="text-field" id="headerQuestion" placeholder="1, 1 A, 1 b...">
-          </div>
-          <div class="checkbox-row" style="margin-top:14px;">
-            <input type="checkbox" id="chkHeader">
-            <label for="chkHeader">Incluir identificação (estilo cabeçalho do IFMG)</label>
-          </div>
-          <div id="headerFields" style="display:none;">
-            <div class="stack-field">
-              <label for="headerName">Nome do aluno</label>
-              <input type="text" class="text-field" id="headerName" placeholder="Insira seu nome">
-            </div>
-          </div>
-          <div class="hint">Se for gerar várias questões seguidas, deixe a identificação marcada só na primeira e desmarque nas próximas.</div>
-        </div>
-      </div>
-
       <div class="panel">
         <div class="panel-body">
           <div class="btn-row" style="margin-bottom:8px;">
@@ -402,8 +426,7 @@
             <button class="btn ghost" id="btnClear" type="button">Limpar</button>
           </div>
           <div class="btn-row" style="margin-bottom:8px;">
-            <button class="btn ghost btn-scilab" id="btnPdfScilab" type="button" disabled title="Impressão no estilo do console do Scilab">Versão Scilab</button>
-            <button class="btn ghost btn-scinotes" id="btnPdfScinotes" type="button" disabled title="Impressão com numeração de linhas, no estilo do SciNotes">SciNotes</button>
+            <button class="btn ghost btn-scilab" id="btnPdfScilab" type="button" disabled title="Impressão no estilo do console do Scilab">Baixar PDF</button>
           </div>
           <div class="btn-row" style="margin-bottom:8px;">
             <button class="btn ghost btn-scicode" id="btnScilabCode" type="button" disabled title="Gera um script .sce de verdade, pra colar e rodar no Scilab">Código Scilab (.sce)</button>
@@ -462,6 +485,10 @@
                 <label>Tolerância</label>
                 <input type="number" class="param" id="tolInput" value="0.001" min="1e-15" step="any" style="width:100%;">
               </div>
+              <div class="checkbox-row" style="margin-top:10px;">
+                <input type="checkbox" id="chkScilabChart">
+                <label for="chkScilabChart">Incluir gráfico de convergência no final do PDF (Versão Scilab)</label>
+              </div>
             </div>
           </div>
 
@@ -476,6 +503,42 @@
         <div class="panel-head" id="stepsHead">PASSO A PASSO</div>
         <div class="panel-body" id="stepsBody">
           <div class="empty-state">Preencha a matriz ao lado para ver os passos aparecerem aqui.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLUNA DIREITA: questões -->
+    <div class="aside">
+      <div class="panel" id="headerPanel">
+        <div class="panel-head">CABEÇALHO DO PDF</div>
+        <div class="panel-body">
+          <div class="stack-field">
+            <label for="headerQuestion">Questão (título do PDF)</label>
+            <input type="text" class="text-field" id="headerQuestion" placeholder="1, 1 A, 1 b...">
+          </div>
+          <div class="checkbox-row" style="margin-top:14px;">
+            <input type="checkbox" id="chkHeader">
+            <label for="chkHeader">Incluir identificação (estilo cabeçalho do IFMG)</label>
+          </div>
+          <div id="headerFields" style="display:none;">
+            <div class="stack-field">
+              <label for="headerName">Nome do aluno</label>
+              <input type="text" class="text-field" id="headerName" placeholder="Insira seu nome">
+            </div>
+          </div>
+          <div class="hint">Se for gerar várias questões seguidas, deixe a identificação marcada só na primeira e desmarque nas próximas.</div>
+          <button class="btn ghost btn-scicode" id="btnSaveQuestion" type="button" style="margin-top:12px;" title="Guarda esta questão na lista pra baixar junto com as outras">+ Salvar questão</button>
+        </div>
+      </div>
+
+      <div class="panel" id="savedPanel" style="display:none;">
+        <div class="panel-head">QUESTÕES SALVAS</div>
+        <div class="panel-body">
+          <div class="saved-list" id="savedList"></div>
+          <div class="saved-lead">Baixar todas num PDF só:</div>
+          <div class="btn-row">
+            <button class="btn ghost btn-scilab" id="btnAllScilab" type="button">Baixar PDF</button>
+          </div>
         </div>
       </div>
     </div>
@@ -513,7 +576,8 @@
     jn: 3,                // jacobi: n x n
     A: [], b: [],
     inicio: 0, numIter: 10, stopMode: "iter", tolerance: 0.001,
-    headerOn: false, headerName: "", headerQuestion: ""
+    headerOn: false, headerName: "", headerQuestion: "",
+    scilabChartOn: false
   };
 
   function mk(rows, cols, fill){
@@ -667,14 +731,59 @@
     return {iterations:iterations, historico:historico, n:n, convergedAt:convergedAt, stopMode:stopMode, tolerance:tolerance};
   }
 
-  function jacobiFormula(d){
-    var s = "x"+(d.i+1)+" = ("+fmt(d.bi);
+  function jacobiFormula(d, f){
+    f = f || fmt;
+    var s = "x"+(d.i+1)+" = ("+f(d.bi);
     d.terms.forEach(function(t){
-      if (t.coef >= 0) s += " − "+fmt(t.coef)+"("+fmt(t.val)+")";
-      else s += " + "+fmt(-t.coef)+"("+fmt(t.val)+")";
+      if (t.coef >= 0) s += " − "+f(t.coef)+"("+f(t.val)+")";
+      else s += " + "+f(-t.coef)+"("+f(t.val)+")";
     });
-    s += ") ÷ "+num(d.aii)+"   =   "+fmt(d.result);
+    var aiiStr = f(d.aii);
+    s += ") ÷ "+(d.aii < 0 ? "("+aiiStr+")" : aiiStr)+"   =   "+f(d.result);
     return s;
+  }
+
+  // formatador de casas decimais correto pro run do Jacobi: usa a mesma regra
+  // da interface (fmtTol quando é modo tolerância, senão fmt de 4 casas)
+  function jacobiFmt(run){
+    return run.stopMode === "tol" ? function(x){ return fmtTol(x, run.tolerance); } : fmt;
+  }
+
+  // ---------- Gauss-Seidel ----------
+  // Mesma ideia do Jacobi, mas SEM vetor separado X: cada x(i) é atualizado
+  // na hora, então ao calcular a linha i já usa os x(j) novos (j < i, já
+  // atualizados nesta mesma varredura) e os x(j) antigos (j > i, ainda não
+  // chegou a vez deles). É essa reaproveitação imediata que faz convergir
+  // mais rápido que o Jacobi (que só atualiza tudo de uma vez, no final).
+  function gaussSeidelRun(A, b, inicio, numIter, stopMode, tolerance){
+    var n = A.length;
+    var x = []; for (var i=0;i<n;i++) x.push(inicio);
+    var historico = [x.slice()];
+    var iterations = [];
+    var convergedAt = null;
+    var maxK = stopMode === "tol" ? 1000 : numIter;
+    for (var k=0; k<maxK; k++){
+      var xOld = x.slice(); // só pra medir o erro máximo no final da varredura
+      var detail = [];
+      for (var ri=0; ri<n; ri++){
+        var soma = 0; var terms = [];
+        for (var j=0;j<n;j++){ if (j!==ri){ soma += A[ri][j]*x[j]; terms.push({coef:A[ri][j], val:x[j]}); } }
+        var aii = A[ri][ri];
+        var val = (b[ri]-soma)/aii;
+        x[ri] = val; // substitui na hora — próximas linhas desta varredura já usam este valor
+        detail.push({i:ri, terms:terms, bi:b[ri], aii:aii, result:val});
+      }
+      // erro máximo entre a varredura anterior e esta
+      var err = 0;
+      for (var ei=0; ei<n; ei++) err = Math.max(err, Math.abs(x[ei] - xOld[ei]));
+      historico.push(x.slice());
+      iterations.push({k:k, detail:detail, x:x.slice(), err:err});
+      if (stopMode === "tol" && err <= tolerance){
+        convergedAt = k;
+        break;
+      }
+    }
+    return {iterations:iterations, historico:historico, n:n, convergedAt:convergedAt, stopMode:stopMode, tolerance:tolerance};
   }
 
   // ---------- fatoração LU (Doolittle, sem troca de linhas) ----------
@@ -1101,14 +1210,14 @@
   function render(){
     document.getElementById("stepsHead").textContent =
       state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
-      state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" : "PASSO A PASSO — JACOBI";
+      state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" :
+      state.method === "seidel" ? "PASSO A PASSO — GAUSS-SEIDEL" : "PASSO A PASSO — JACOBI";
     if (state.method === "lu"){
       var lurun = luSteps(state.A, state.b);
       lastComputation = {method:"lu", run:lurun};
       renderLuSteps(lurun);
       
       document.getElementById("btnPdfScilab").disabled = false;
-      document.getElementById("btnPdfScinotes").disabled = false;
       document.getElementById("btnScilabCode").disabled = false;
       return;
     }
@@ -1118,19 +1227,19 @@
       renderGaussSteps(steps);
     } else {
       var diag0 = state.A.some(function(row,i){ return Math.abs(row[i]) < 1e-9; });
-      var run = jacobiRun(state.A, state.b, state.inicio, state.numIter, state.stopMode, state.tolerance);
-      lastComputation = {method:"jacobi", run:run, diagWarn:diag0};
+      var runFn = state.method === "seidel" ? gaussSeidelRun : jacobiRun;
+      var run = runFn(state.A, state.b, state.inicio, state.numIter, state.stopMode, state.tolerance);
+      lastComputation = {method: state.method, run:run, diagWarn:diag0};
       renderJacobiSteps(run);
       if (diag0){
         var warn = document.createElement("div");
         warn.className = "hint"; warn.style.color = "var(--danger)"; warn.style.marginTop = "10px";
-        warn.textContent = "Atenção: há um elemento zero na diagonal principal — o método de Jacobi pode não convergir.";
+        warn.textContent = "Atenção: há um elemento zero na diagonal principal — o método de "+(state.method === "seidel" ? "Gauss-Seidel" : "Jacobi")+" pode não convergir.";
         document.getElementById("stepsBody").appendChild(warn);
       }
     }
     
     document.getElementById("btnPdfScilab").disabled = false;
-    document.getElementById("btnPdfScinotes").disabled = false;
     document.getElementById("btnScilabCode").disabled = false;
   }
 
@@ -1140,7 +1249,7 @@
     document.querySelectorAll(".method-opt").forEach(function(el){
       el.classList.toggle("active", el.dataset.method === m);
     });
-    document.getElementById("jacobiParams").style.display = m === "jacobi" ? "flex" : "none";
+    document.getElementById("jacobiParams").style.display = (m === "jacobi" || m === "seidel") ? "flex" : "none";
     document.getElementById("rowsField").style.display = m === "gauss" ? "flex" : "none";
     document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("dimsHint").textContent = m === "gauss"
@@ -1215,6 +1324,12 @@
       state.A = [[3,2,4],[1,1,2],[4,3,2]];
       state.b = [1,2,3];
       document.getElementById("colsVal").textContent = state.jn;
+    } else if (state.method === "seidel"){
+      state.jn = 4;
+      state.A = [[9,1,-2,2],[1,15,-3,2],[1,-2,8,3],[2,2,1,12]];
+      state.b = [10.5,14.6,18.1,19.4];
+      document.getElementById("colsVal").textContent = state.jn;
+      document.getElementById("numIter").value = 10; state.numIter = 10;
     } else {
       state.jn = 4;
       state.A = [[9,1,-2,2],[1,15,-3,2],[1,-2,8,3],[2,2,1,12]];
@@ -1244,6 +1359,13 @@
   });
   headerNameEl.addEventListener("input", function(){ state.headerName = headerNameEl.value; saveLocal(); });
   headerQuestionEl.addEventListener("input", function(){ state.headerQuestion = headerQuestionEl.value; saveLocal(); });
+
+  // ---------- gráfico de convergência no PDF Scilab (Jacobi) ----------
+  var chkScilabChartEl = document.getElementById("chkScilabChart");
+  chkScilabChartEl.addEventListener("change", function(){
+    state.scilabChartOn = chkScilabChartEl.checked;
+    saveLocal();
+  });
 
   // ---------- PDF ----------
   var PALETTE = {
@@ -1512,17 +1634,20 @@
         y += 8;
       }
 
+      // formatador de casas decimais correto (idêntico ao usado na interface)
+      var jf1 = jacobiFmt(lastComputation.run);
+
       // chute inicial: linha de contexto simples, não conta como iteração
       var x0 = lastComputation.run.historico[0];
       var partes0 = [];
-      for (var z0=0; z0<lastComputation.run.n; z0++) partes0.push("x"+(z0+1)+" = "+fmt(x0[z0]));
+      for (var z0=0; z0<lastComputation.run.n; z0++) partes0.push("x"+(z0+1)+" = "+jf1(x0[z0]));
       doc.setFont("helvetica","normal"); doc.setFontSize(10); doc.setTextColor.apply(doc, PALETTE.ink);
       ensureSpace(16);
       firmText("Chute inicial (x0):   "+partes0.join("     "), margin, y);
       y += 20;
 
       lastComputation.run.iterations.forEach(function(it){
-        iterBox("ITERAÇÃO "+it.k, it.detail.map(function(d){ return jacobiFormula(d); }));
+        iterBox("ITERAÇÃO "+it.k, it.detail.map(function(d){ return jacobiFormula(d, jf1); }));
       });
 
       sectionLabel("Tabela de iterações");
@@ -1531,7 +1656,7 @@
       var bodyRows = [];
       for (var i2=0;i2<lastComputation.run.n;i2++){
         var rowArr = ["x"+(i2+1)];
-        for (var kk=1; kk<lastComputation.run.historico.length; kk++) rowArr.push(fmt(lastComputation.run.historico[kk][i2]));
+        for (var kk=1; kk<lastComputation.run.historico.length; kk++) rowArr.push(jf1(lastComputation.run.historico[kk][i2]));
         bodyRows.push(rowArr);
       }
       ensureSpace(20);
@@ -1548,7 +1673,7 @@
 
       var lastX = lastComputation.run.historico[lastComputation.run.historico.length-1];
       var solParts2 = [];
-      for (var vi=0; vi<lastComputation.run.n; vi++) solParts2.push("x"+(vi+1)+" = "+fmt(lastX[vi]));
+      for (var vi=0; vi<lastComputation.run.n; vi++) solParts2.push("x"+(vi+1)+" = "+jf1(lastX[vi]));
       resultBox("RESULTADO APÓS "+lastComputation.run.iterations.length+" ITERAÇÕES", solParts2);
       if (lastComputation.diagWarn){
         ensureSpace(20);
@@ -1572,7 +1697,7 @@
   async function downloadPdf(){
     var doc = buildPdf();
     if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : "jacobi");
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : "jacobi"));
     var filename = nomeMetodo + "-passo-a-passo.pdf";
     var blob = doc.output("blob");
     try{
@@ -1654,18 +1779,22 @@
     s += ") / ("+fmt(d.aii)+")  =  "+fmt(d.result);
     return s;
   }
-  function scJacobiFormula(d){
-    var s = "x"+(d.i+1)+" = ("+fmt(d.bi);
+  function scJacobiFormula(d, f){
+    f = f || fmt;
+    var s = "x"+(d.i+1)+" = ("+f(d.bi);
     d.terms.forEach(function(t){
-      if (t.coef >= 0) s += " - "+fmt(t.coef)+"*"+fmt(t.val);
-      else s += " + "+fmt(-t.coef)+"*"+fmt(t.val);
+      if (t.coef >= 0) s += " - "+f(t.coef)+"*"+f(t.val);
+      else s += " + "+f(-t.coef)+"*"+f(t.val);
     });
-    s += ") / ("+fmt(d.aii)+")  =  "+fmt(d.result);
+    s += ") / ("+f(d.aii)+")  =  "+f(d.result);
     return s;
   }
 
-  function buildScilabPdf(){
-    if (!lastComputation) return;
+  // items (opcional): lista de {st, comp} pra juntar várias questões num PDF só.
+  // sem argumento, desenha só a questão atual (comportamento de sempre).
+  function buildScilabPdf(items){
+    items = items || [{st: state, comp: lastComputation}];
+    if (!items.length || !items[0].comp) return;
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({unit:"pt", format:"a4"});
     var pageW = doc.internal.pageSize.getWidth();
@@ -1714,104 +1843,166 @@
       blank(11);
     }
 
-    // cabeçalho de identificação, em formato de comentário de código
-    if (state.headerOn){
-      var today = new Date();
-      var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+    // desenha UMA questão (cabeçalho opcional + título + conteúdo) a partir de y
+    function drawQuestion(st, comp){
+      // cabeçalho de identificação, em formato de comentário de código
+      if (st.headerOn){
+        var today = new Date();
+        var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+        mono(12, INK);
+        var rule = "// "+Array(64).join("-");
+        line(rule);
+        line("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
+        line("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
+        line("// Professora: Lucélia Radin");
+        line("// Aluno(a): "+(st.headerName || "_________________________"));
+        line("// Data: "+dateStr);
+        line(rule);
+        blank(11);
+      }
+
+      // "Questão" — mesmo lugar, mas discreto, como um comentário no script
+      var questionTitle = st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão";
       mono(12, INK);
-      var rule = "// "+Array(64).join("-");
-      line(rule);
-      line("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
-      line("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
-      line("// Professora: Lucélia Radin");
-      line("// Aluno(a): "+(state.headerName || "_________________________"));
-      line("// Data: "+dateStr);
-      line(rule);
-      blank(11);
-    }
+      line("// "+questionTitle);
+      blank(7);
 
-    // "Questão" — mesmo lugar, mas discreto, como um comentário no script
-    var questionTitle = state.headerQuestion ? ("Questão " + state.headerQuestion) : "Questão";
-    mono(12, INK);
-    line("// "+questionTitle);
-    blank(7);
-
-    if (lastComputation.method === "gauss"){
-      var todos = lastComputation.steps;
-      linePrompt("-->A");
-      drawScMatrix(todos[0].matrix, state.cols);
-      todos.slice(1).forEach(function(s){
-        if (s.type === "skip") return;
-        if (s.type === "final") return;
-        line(scDesc(s));
-        drawScMatrix(s.matrix, state.cols);
-      });
-      line('disp("RESULTADO:")');
-      line("RESULTADO:");
-      var last = todos[todos.length-1];
-      drawScMatrix(last.matrix, state.cols);
-      var n = last.matrix.length, m = state.cols;
-      blank(4);
-      mono(9.5, SOFT);
-      line("// Solução:");
-      mono(10, INK);
-      for (var i=0;i<Math.min(n,m);i++) line("//   x"+(i+1)+" = "+fmt(last.matrix[i][m]));
-    } else if (lastComputation.method === "lu"){
-      var lu = lastComputation.run;
-      linePrompt("-->A");
-      drawScMatrix(lu.A);
-      lu.etapas.forEach(function(e){
-        blank(4);
-        line("// Etapa "+e.k+" — pivo a"+e.k+e.k+" = "+fmt(e.pivo));
-        e.mults.forEach(function(mm){
-          line("L"+mm.i+" -> L"+mm.i+" - m"+mm.i+mm.k+"*L"+mm.k+"   m"+mm.i+mm.k+" = "+fmt(mm.m));
+      if (comp.method === "gauss"){
+        var todos = comp.steps;
+        linePrompt("-->A");
+        drawScMatrix(todos[0].matrix, st.cols);
+        todos.slice(1).forEach(function(s){
+          if (s.type === "skip") return;
+          if (s.type === "final") return;
+          line(scDesc(s));
+          drawScMatrix(s.matrix, st.cols);
         });
-        drawScMatrix(e.matrix);
-      });
-      if (lu.falhou){
-        mono(9.5, INK);
-        line(lu.falhou);
-      } else {
-        linePrompt("-->L");
-        drawScMatrix(lu.L);
+        line('disp("RESULTADO:")');
+        line("RESULTADO:");
+        var last = todos[todos.length-1];
+        drawScMatrix(last.matrix, st.cols);
+        var n = last.matrix.length, m = st.cols;
         blank(4);
-        linePrompt("-->U");
-        drawScMatrix(lu.U);
-        blank(4);
-        linePrompt("-->L*U   // conferencia: deve reproduzir A");
-        drawScMatrix(lu.LU);
-        blank(4);
-        line("// L*y = b  (substituicao para frente)");
-        lu.yDetail.forEach(function(d){ line(scLuForward(d)); });
-        blank(6);
-        line("// U*x = y  (substituicao para tras)");
-        lu.xDetail.slice().reverse().forEach(function(d){ line(scLuBack(d)); });
-        blank(6);
         mono(9.5, SOFT);
         line("// Solução:");
         mono(10, INK);
-        for (var li=0; li<lu.n; li++) line("//   x"+(li+1)+" = "+fmt(lu.x[li]));
-      }
-    } else {
-      var run = lastComputation.run;
-      line("inicio = "+state.inicio+";   num_interacoes = "+run.iterations.length+";");
-      blank(6);
-      run.iterations.forEach(function(it){
-        line("// Iteração "+(it.k+1));
-        it.detail.forEach(function(d){ line(scJacobiFormula(d)); });
+        for (var i=0;i<Math.min(n,m);i++) line("//   x"+(i+1)+" = "+fmt(last.matrix[i][m]));
+      } else if (comp.method === "lu"){
+        var lu = comp.run;
+        linePrompt("-->A");
+        drawScMatrix(lu.A);
+        lu.etapas.forEach(function(e){
+          blank(4);
+          line("// Etapa "+e.k+" — pivo a"+e.k+e.k+" = "+fmt(e.pivo));
+          e.mults.forEach(function(mm){
+            line("L"+mm.i+" -> L"+mm.i+" - m"+mm.i+mm.k+"*L"+mm.k+"   m"+mm.i+mm.k+" = "+fmt(mm.m));
+          });
+          drawScMatrix(e.matrix);
+        });
+        if (lu.falhou){
+          mono(9.5, INK);
+          line(lu.falhou);
+        } else {
+          linePrompt("-->L");
+          drawScMatrix(lu.L);
+          blank(4);
+          linePrompt("-->U");
+          drawScMatrix(lu.U);
+          blank(4);
+          linePrompt("-->L*U   // conferencia: deve reproduzir A");
+          drawScMatrix(lu.LU);
+          blank(4);
+          line("// L*y = b  (substituicao para frente)");
+          lu.yDetail.forEach(function(d){ line(scLuForward(d)); });
+          blank(6);
+          line("// U*x = y  (substituicao para tras)");
+          lu.xDetail.slice().reverse().forEach(function(d){ line(scLuBack(d)); });
+          blank(6);
+          mono(9.5, SOFT);
+          line("// Solução:");
+          mono(10, INK);
+          for (var li=0; li<lu.n; li++) line("//   x"+(li+1)+" = "+fmt(lu.x[li]));
+        }
+      } else {
+        var run = comp.run;
+        var jf2 = jacobiFmt(run);
+        line("inicio = "+st.inicio+";   num_interacoes = "+run.iterations.length+";");
         blank(6);
-      });
-      var lastX = run.historico[run.historico.length-1];
-      mono(9.5, SOFT);
-      line("// Resultado após "+run.iterations.length+" iteracoes:");
-      mono(10, INK);
-      for (var vi=0; vi<run.n; vi++) line("//   x"+(vi+1)+" = "+fmt(lastX[vi]));
-      if (lastComputation.diagWarn){
-        blank(6);
-        mono(9, INK);
-        line("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
+        run.iterations.forEach(function(it){
+          line("// Iteração "+(it.k+1));
+          it.detail.forEach(function(d){ line("x"+(d.i+1)+" = "+jf2(d.result)+";"); });
+          line("erro_maximo = "+jf2(it.err)+";");
+          blank(6);
+        });
+        var lastX = run.historico[run.historico.length-1];
+        mono(9.5, SOFT);
+        line("// Resultado após "+run.iterations.length+" iteracoes:");
+        mono(10, INK);
+        for (var vi=0; vi<run.n; vi++) line("//   x"+(vi+1)+" = "+jf2(lastX[vi]));
+        if (comp.diagWarn){
+          blank(6);
+          mono(9, INK);
+          line("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
+        }
+
+        if (st.scilabChartOn){
+          blank(10);
+          ensureSpace(14.4*4);
+          mono(12, INK);
+          line("// Tabela de iterações");
+          blank(4);
+          // tabela em texto puro, colunas alinhadas, como uma saída do console
+          var headT = ["k"];
+          for (var tx=0; tx<run.n; tx++) headT.push("x"+(tx+1));
+          headT.push("Erro Máximo");
+          var rowsT = [];
+          var r0 = ["0"];
+          for (var t0=0; t0<run.n; t0++) r0.push(jf2(run.historico[0][t0]));
+          r0.push("-");
+          rowsT.push(r0);
+          run.iterations.forEach(function(it){
+            var rr = [String(it.k+1)];
+            for (var t2=0; t2<run.n; t2++) rr.push(jf2(it.x[t2]));
+            rr.push(jf2(it.err));
+            rowsT.push(rr);
+          });
+          var wT = headT.map(function(h, c){
+            var m = h.length;
+            rowsT.forEach(function(r){ if (r[c].length > m) m = r[c].length; });
+            return m;
+          });
+          var totalCh = wT.reduce(function(a, b){ return a + b; }, 0) + 3*(wT.length-1);
+          var sizeT = Math.min(14, (pageW - margin*2) / (totalCh * 0.6));
+          function fmtRowT(r){
+            return r.map(function(v, c){ return c === 0 ? v.padEnd(wT[c]) : v.padStart(wT[c]); }).join("   ");
+          }
+          function rowT(txt){
+            ensureSpace(sizeT*1.2);
+            monoGrid(sizeT, INK);
+            doc.text(asciiClean(txt), margin, y);
+            y += sizeT*1.2;
+          }
+          rowT(fmtRowT(headT));
+          rowsT.forEach(function(r){ rowT(fmtRowT(r)); });
+        }
       }
     }
+
+    items.forEach(function(it, idx){
+      if (idx > 0){
+        // espaço + linha de traços + espaço entre as questões (ajustável em QUESTION_GAP)
+        var keepSc = (it.st.headerOn ? 112 : 0) + 100;   // não deixa o título da questão sozinho no pé da página
+        y += QUESTION_GAP.scilab;
+        if (y + 14.4 + QUESTION_GAP.scilab + keepSc > pageH - margin){
+          doc.addPage(); y = margin;   // a própria quebra de página já separa as questões
+        } else {
+          mono(12, INK);
+          line(Array(Math.floor((pageW - margin*2) / doc.getTextWidth("-")) + 1).join("-"));
+          y += QUESTION_GAP.scilab;
+        }
+      }
+      drawQuestion(it.st, it.comp);
+    });
 
     var pageCount = doc.internal.getNumberOfPages();
     for (var pg=1; pg<=pageCount; pg++){
@@ -1826,7 +2017,7 @@
   async function downloadScilabPdf(){
     var doc = buildScilabPdf();
     if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : "jacobi");
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : "jacobi"));
     var filename = nomeMetodo + "-scilab.pdf";
     var blob = doc.output("blob");
     try{
@@ -1850,166 +2041,89 @@
 
   document.getElementById("btnPdfScilab").addEventListener("click", downloadScilabPdf);
 
-  // ---------- versão "impressão do SciNotes" ----------
-  // Mesmo texto/processo do modo Scilab acima, mas no template do editor:
-  // numeração de linha à esquerda (0001, 0002...), sem prompts "-->" nem
-  // ecoar chamadas como disp(...) — só o conteúdo (comentários, matrizes,
-  // fórmulas), como se tivesse sido impresso pelo próprio SciNotes.
-  function buildScinotesPdf(){
-    if (!lastComputation) return;
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({unit:"pt", format:"a4"});
-    var pageW = doc.internal.pageSize.getWidth();
-    var pageH = doc.internal.pageSize.getHeight();
-    var margin = 72; // 25.4mm = 1in, igual à Config. de Página padrão do Scilab
-    var gutter = 30;
-    var y = margin;
-    var lineNo = 1;
-    var INK = [20,20,20], SOFT = [130,130,130], GREEN = [0,128,0];
 
-    function asciiClean(s){
-      return String(s)
-        .replace(/[\u2212\u2013\u2014]/g, "-")
-        .replace(/\u2192/g, "->")
-        .replace(/\u2194/g, "<->")
-        .replace(/\u00F7/g, "/")
-        .replace(/\u00D7/g, "x")
-        .replace(/\u27F9|\u21D2/g, "=>")
-        .replace(/\u00B7/g, "");
-    }
-    function ensureSpace(h){
-      if (y + h > pageH - margin){ doc.addPage(); y = margin; }
-    }
-    function mono(size, color){
-      doc.setFont("courier","normal"); doc.setFontSize(size); doc.setTextColor.apply(doc, color || INK);
-    }
-    // cada linha visível ganha um número sequencial, igual à numeração de um
-    // arquivo aberto no SciNotes — inclusive linhas em branco contam.
-    // comentários (//) saem em verde, igual à colorização padrão do editor.
-    function line(text){
-      ensureSpace(13);
-      mono(9.5, SOFT);
-      doc.text(String(lineNo).padStart(4,"0"), margin, y);
-      if (text){
-        var isComment = /^\s*\/\//.test(text);
-        mono(9.5, isComment ? GREEN : INK);
-        doc.text(asciiClean(text), margin+gutter, y);
-      }
-      y += 13;
-      lineNo++;
-    }
-    function blank(){ line(""); }
-    function drawScMatrix(mtx, augAt){
-      var rows = scMatrixLines(mtx, augAt);
-      ensureSpace(rows.length*13 + 4);
-      rows.forEach(function(r){ line("    "+r); });
-    }
+  // ---------- questões salvas: várias questões num PDF só ----------
+  // Cada questão salva guarda uma cópia do estado (método, matriz, cabeçalho,
+  // opções do Jacobi...). Na hora de baixar, os resultados são recalculados
+  // a partir dessa cópia e desenhados um depois do outro no MESMO PDF.
+  // Espaço antes e depois da linha de traços que separa as questões (em pontos, pt):
+  var QUESTION_GAP = {scilab: 22};
 
-    if (state.headerOn){
-      var today = new Date();
-      var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
-      var rule = "// "+Array(64).join("-");
-      line(rule);
-      line("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
-      line("// Disciplina: Calculo Numerico          Curso: Engenharia Civil");
-      line("// Professora: Lucelia Radin");
-      line("// Aluno(a): "+(state.headerName || "_________________________"));
-      line("// Data: "+dateStr);
-      line(rule);
-      blank();
-    }
+  var savedQuestions = [];
+  var savedNextId = 1;
 
-    var questionTitle = state.headerQuestion ? ("Questao " + state.headerQuestion) : "Questao";
-    line("// "+questionTitle);
-    blank();
-
-    if (lastComputation.method === "gauss"){
-      var todos = lastComputation.steps;
-      line("// Matriz A");
-      drawScMatrix(todos[0].matrix, state.cols);
-      todos.slice(1).forEach(function(s){
-        if (s.type === "skip") return;
-        if (s.type === "final") return;
-        blank();
-        line(scDesc(s));
-        drawScMatrix(s.matrix, state.cols);
-      });
-      blank();
-      line("// RESULTADO");
-      var last = todos[todos.length-1];
-      drawScMatrix(last.matrix, state.cols);
-      var n = last.matrix.length, m = state.cols;
-      blank();
-      line("// solucao:");
-      for (var i=0;i<Math.min(n,m);i++) line("//   x"+(i+1)+" = "+fmt(last.matrix[i][m]));
-    } else if (lastComputation.method === "lu"){
-      var lu = lastComputation.run;
-      line("// Matriz A");
-      drawScMatrix(lu.A);
-      lu.etapas.forEach(function(e){
-        blank();
-        e.mults.forEach(function(mm){
-          line("m"+mm.i+mm.k+" = "+fmt(mm.m));
-        });
-        drawScMatrix(e.matrix);
-      });
-      if (lu.falhou){
-        blank();
-        line(lu.falhou);
-      } else {
-        blank();
-        line("// Matriz L");
-        drawScMatrix(lu.L);
-        blank();
-        line("// Matriz U");
-        drawScMatrix(lu.U);
-        blank();
-        line("// L*U — conferencia: deve reproduzir A");
-        drawScMatrix(lu.LU);
-        blank();
-        line("// L*y = b  (substituicao para frente)");
-        lu.yDetail.forEach(function(d){ line(scLuForward(d)); });
-        blank();
-        line("// U*x = y  (substituicao para tras)");
-        lu.xDetail.slice().reverse().forEach(function(d){ line(scLuBack(d)); });
-        blank();
-        line("// solucao:");
-        for (var li=0; li<lu.n; li++) line("//   x"+(li+1)+" = "+fmt(lu.x[li]));
-      }
-    } else {
-      var run = lastComputation.run;
-      line("// inicio = "+state.inicio+"   num_interacoes = "+run.iterations.length);
-      blank();
-      run.iterations.forEach(function(it){
-        line("// iteracao "+(it.k+1));
-        it.detail.forEach(function(d){ line(scJacobiFormula(d)); });
-        blank();
-      });
-      var lastX = run.historico[run.historico.length-1];
-      line("// resultado apos "+run.iterations.length+" iteracoes:");
-      for (var vi=0; vi<run.n; vi++) line("//   x"+(vi+1)+" = "+fmt(lastX[vi]));
-      if (lastComputation.diagWarn){
-        blank();
-        line("// atencao: elemento zero na diagonal principal de A — convergencia nao garantida.");
-      }
-    }
-
-    var pageCount = doc.internal.getNumberOfPages();
-    for (var pg=1; pg<=pageCount; pg++){
-      doc.setPage(pg);
-      mono(8, SOFT);
-      doc.text(String(pg)+" / "+pageCount, pageW-margin, pageH-20, {align:"right"});
-    }
-
-    return doc;
+  function persistSaved(){
+    try{ localStorage.setItem("cn_saved", JSON.stringify(savedQuestions)); }catch(e){ /* storage unavailable — ignore */ }
+  }
+  function loadSaved(){
+    try{
+      var raw = localStorage.getItem("cn_saved");
+      if (!raw) return;
+      var arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      savedQuestions = arr.filter(function(q){ return q && q.st && q.st.method && Array.isArray(q.st.A); });
+      savedQuestions.forEach(function(q){ if (q.id >= savedNextId) savedNextId = q.id + 1; });
+    }catch(e){ savedQuestions = []; }
   }
 
-  async function downloadScinotesPdf(){
-    var doc = buildScinotesPdf();
-    if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : "jacobi");
-    var filename = nomeMetodo + "-scinotes.pdf";
-    var blob = doc.output("blob");
+  // mesma lógica do render(), mas a partir de um estado guardado (sem tocar na tela)
+  function computeFor(st){
+    if (st.method === "lu") return {method:"lu", run: luSteps(st.A, st.b)};
+    if (st.method === "gauss") return {method:"gauss", steps: gaussJordanSteps(st.A)};
+    var diag0 = st.A.some(function(row, i){ return Math.abs(row[i]) < 1e-9; });
+    var runFn = st.method === "seidel" ? gaussSeidelRun : jacobiRun;
+    var run = runFn(st.A, st.b, st.inicio, st.numIter, st.stopMode, st.tolerance);
+    return {method: st.method === "seidel" ? "seidel" : "jacobi", run: run, diagWarn: diag0};
+  }
+
+  function savedTitle(st){ return st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão"; }
+  function savedMethodName(st){ return st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : "Jacobi")); }
+
+  function renderSaved(){
+    var panel = document.getElementById("savedPanel");
+    var list = document.getElementById("savedList");
+    panel.style.display = savedQuestions.length ? "" : "none";
+    list.innerHTML = "";
+    savedQuestions.forEach(function(q){
+      var item = document.createElement("div");
+      item.className = "saved-item";
+      var txt = document.createElement("div");
+      txt.className = "saved-txt";
+      var t = document.createElement("div");
+      t.className = "saved-title";
+      t.textContent = savedTitle(q.st);
+      var sub = document.createElement("div");
+      sub.className = "saved-sub";
+      sub.textContent = savedMethodName(q.st) + " · " + (q.st.headerOn ? "com cabeçalho" : "sem cabeçalho");
+      txt.appendChild(t); txt.appendChild(sub);
+      var x = document.createElement("button");
+      x.type = "button"; x.className = "saved-x"; x.textContent = "×";
+      x.dataset.id = String(q.id);
+      x.setAttribute("aria-label", "Excluir " + savedTitle(q.st));
+      x.title = "Excluir";
+      item.appendChild(txt); item.appendChild(x);
+      list.appendChild(item);
+    });
+  }
+
+  document.getElementById("btnSaveQuestion").addEventListener("click", function(){
+    if (!lastComputation) return;
+    savedQuestions.push({id: savedNextId++, st: JSON.parse(JSON.stringify(state))});
+    persistSaved(); renderSaved();
+    var btn = this, original = btn.textContent;
+    btn.textContent = "Salva ✓";
+    setTimeout(function(){ btn.textContent = original; }, 1200);
+  });
+
+  document.getElementById("savedList").addEventListener("click", function(e){
+    var btn = e.target.closest(".saved-x");
+    if (!btn) return;
+    var id = parseInt(btn.dataset.id, 10);
+    savedQuestions = savedQuestions.filter(function(q){ return q.id !== id; });
+    persistSaved(); renderSaved();
+  });
+
+  async function saveBlobFile(blob, filename){
     try{
       var downloads = await claude.use("downloads");
       if (downloads){
@@ -2029,14 +2143,29 @@
     setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
   }
 
-  document.getElementById("btnPdfScinotes").addEventListener("click", downloadScinotesPdf);
+  function savedItems(){
+    return savedQuestions.map(function(q){ return {st: q.st, comp: computeFor(q.st)}; });
+  }
+
+  document.getElementById("btnAllScilab").addEventListener("click", async function(){
+    if (!savedQuestions.length) return;
+    var doc = buildScilabPdf(savedItems());
+    if (doc) await saveBlobFile(doc.output("blob"), "questoes-scilab.pdf");
+  });
+
+  loadSaved();
+  renderSaved();
 
   // ---------- Código Scilab (.sce) — script real pra rodar no Scilab ----------
+  // O script CALCULA tudo no próprio Scilab (nenhum resultado vem colado do site)
+  // e imprime, linha por linha, o mesmo texto que o PDF da "Versão Scilab" mostra:
+  // mesmas descrições de operação, mesmas matrizes, mesmas casas decimais.
+  // Se mudar o texto de algum passo no PDF Scilab (buildScilabPdf), mude aqui também.
   function fmtScilab(v){
+    // número como literal do Scilab, com a precisão que foi digitada (sem arredondar)
     if (!isFinite(v)) return "0";
-    var r = Math.round(v*1e6)/1e6;
-    if (Object.is(r, -0)) r = 0;
-    return r.toString();
+    if (Object.is(v, -0)) v = 0;
+    return String(v);
   }
   function matrixToScilab(mtx){
     return "[" + mtx.map(function(row){ return row.map(fmtScilab).join(" "); }).join(";\n     ") + "]";
@@ -2049,136 +2178,459 @@
     "// Cole no SciNotes e rode (F5, ou selecione tudo e mande executar).\n" +
     "// Usa só funções nativas do Scilab — nenhuma toolbox/lib extra é necessária.\n\n";
 
+  // texto que vai entre aspas no script: mesma limpeza de caracteres do PDF
+  // (traço longo -> "-", seta -> "->"...) e aspas duplicadas, como o Scilab exige
+  function sceStr(s){
+    var t = String(s)
+      .replace(/[\u2212\u2013\u2014]/g, "-")
+      .replace(/\u2192/g, "->")
+      .replace(/\u2194/g, "<->")
+      .replace(/\u00F7/g, "/")
+      .replace(/\u00D7/g, "x")
+      .replace(/\u27F9|\u21D2/g, "=>")
+      .replace(/\u00B7/g, "");
+    return "\"" + t.replace(/'/g, "''").replace(/"/g, "\"\"") + "\"";
+  }
+  function sceEscreve(s){ return "escreve(" + sceStr(s) + ");\n"; }
+
+  // funções de apresentação (só formatam o texto; não fazem conta nenhuma)
+  var SCE_HELP_BASE = String.raw`// ---- apresentação: só formata o texto, igual ao PDF "Versão Scilab" ----
+function escreve(t)
+    mprintf("%s\n", t);
+endfunction
+
+function s = fnum(x)
+    // até 4 casas decimais, sem zeros à direita (mesmo formato do site)
+    if isnan(x) | isinf(x) then
+        s = "-";
+        return
+    end
+    r = floor(x*1e4 + 0.5)/1e4;
+    if r == 0 then r = 0; end
+    s = msprintf("%.4f", r);
+    k = length(s);
+    while part(s, k) == "0"
+        k = k - 1;
+    end
+    if part(s, k) == "." then k = k - 1; end
+    s = part(s, 1:k);
+endfunction
+
+`;
+  var SCE_HELP_MATRIZ = String.raw`function s = scnum(x)
+    // número como o disp() do Scilab mostra: inteiro termina com "."
+    if isnan(x) | isinf(x) then
+        s = "Nan";
+        return
+    end
+    s = fnum(x);
+    if isempty(strindex(s, ".")) then s = s + "."; end
+endfunction
+
+function mostra(M, colAug)
+    // imprime a matriz alinhada em colunas; colAug = índice (0,1,2...) da
+    // coluna que ganha um espaço extra antes dela (b da matriz aumentada), ou -1
+    [nl, nc] = size(M);
+    S = emptystr(nl, nc);
+    w = zeros(1, nc);
+    for i = 1:nl
+        for j = 1:nc
+            S(i,j) = scnum(M(i,j));
+            w(j) = max(w(j), length(S(i,j)));
+        end
+    end
+    for i = 1:nl
+        t = "    ";
+        for j = 1:nc
+            if j > 1 then
+                if j == colAug + 1 then
+                    t = t + "   ";
+                else
+                    t = t + "  ";
+                end
+            end
+            t = t + blanks(w(j) - length(S(i,j))) + S(i,j);
+        end
+        escreve(t);
+    end
+    escreve("");
+endfunction
+
+`;
+  var SCE_HELP_TOL = String.raw`function s = ftol(x, casas)
+    // casas decimais fixas (modo tolerância): mesmo formato do site
+    if isnan(x) | isinf(x) then
+        s = "-";
+        return
+    end
+    f = 10^casas;
+    r = floor(x*f + 0.5)/f;
+    if r == 0 then r = 0; end
+    s = msprintf("%." + string(casas) + "f", r);
+endfunction
+
+`;
+
+  // cabeçalho de identificação (opcional) + título da questão, como no PDF Scilab
+  function sceCabecalho(){
+    var code = "";
+    if (state.headerOn){
+      var rule = "// " + Array(64).join("-");
+      code += sceEscreve(rule);
+      code += sceEscreve("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
+      code += sceEscreve("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
+      code += sceEscreve("// Professora: Lucélia Radin");
+      code += sceEscreve("// Aluno(a): " + (state.headerName || "_________________________"));
+      code += "dt = getdate();\n";
+      code += "mprintf(\"// Data: %02d/%02d/%d\\n\", dt(6), dt(2), dt(1));\n";
+      code += sceEscreve(rule);
+      code += sceEscreve("");
+    }
+    code += sceEscreve("// " + (state.headerQuestion ? ("Questão " + state.headerQuestion) : "Questão"));
+    code += sceEscreve("");
+    return code;
+  }
+
   function buildScilabCodeGauss(){
-    var A = matrixToScilab(state.A);
-    return SCE_HEADER +
-"A = "+A+";\n\n"+
-"n = size(A,1);\n"+
-"m = size(A,2) - 1; // número de incógnitas\n\n"+
-"linha = 1;\n"+
-"for coluna = 1:m\n"+
-"    p = 0;\n"+
-"    for i = linha:n\n"+
-"        if abs(A(i,coluna)) > 1e-9 then\n"+
-"            p = i;\n"+
-"            break;\n"+
-"        end\n"+
-"    end\n"+
-"    if p == 0 then\n"+
-"        mprintf(\"Coluna %d nula — nenhum pivô possível.\\n\", coluna);\n"+
-"        continue;\n"+
-"    end\n"+
-"    if p <> linha then\n"+
-"        tmp = A(linha,:); A(linha,:) = A(p,:); A(p,:) = tmp;\n"+
-"        mprintf(\"L%d <-> L%d\\n\", linha, p);\n"+
-"        disp(A);\n"+
-"    end\n"+
-"    valor = A(linha,coluna);\n"+
-"    if abs(valor - 1) > 1e-9 then\n"+
-"        A(linha,:) = A(linha,:) / valor;\n"+
-"        mprintf(\"L%d -> L%d / %g\\n\", linha, linha, valor);\n"+
-"        disp(A);\n"+
-"    end\n"+
-"    for i = 1:n\n"+
-"        if i <> linha then\n"+
-"            c = A(i,coluna);\n"+
-"            if abs(c) > 1e-9 then\n"+
-"                A(i,:) = A(i,:) - c * A(linha,:);\n"+
-"                mprintf(\"L%d -> L%d - (%g)*L%d\\n\", i, i, c, linha);\n"+
-"                disp(A);\n"+
-"            end\n"+
-"        end\n"+
-"    end\n"+
-"    linha = linha + 1;\n"+
-"    if linha > n then break; end\n"+
-"end\n\n"+
-"mprintf(\"\\nSolução (forma escalonada reduzida):\\n\");\n"+
-"disp(A);\n"+
-"for i = 1:min(n,m)\n"+
-"    mprintf(\"x%d = %g\\n\", i, A(i,m+1));\n"+
-"end\n";
+    return SCE_HEADER + SCE_HELP_BASE + SCE_HELP_MATRIZ +
+"A = " + matrixToScilab(state.A) + ";\n" +
+"n = size(A,1);\n" +
+"m = size(A,2) - 1; // número de incógnitas\n\n" +
+sceCabecalho() +
+String.raw`escreve("-->A");
+mostra(A, m);
+
+linha = 1;
+for coluna = 1:m
+    p = 0;
+    for i = linha:n
+        if abs(A(i,coluna)) > 1e-9 then
+            p = i;
+            break;
+        end
+    end
+    if p == 0 then
+        continue; // coluna sem pivô: fica de fora, sem imprimir nada (como no site)
+    end
+    if p <> linha then
+        tmp = A(linha,:); A(linha,:) = A(p,:); A(p,:) = tmp;
+        escreve(msprintf("L%d <-> L%d", linha, p));
+        mostra(A, m);
+    end
+    valor = A(linha,coluna);
+    if abs(valor - 1) > 1e-9 then
+        A(linha,:) = A(linha,:) / valor;
+        escreve(msprintf("L%d -> L%d / (%s)", linha, linha, fnum(valor)));
+        mostra(A, m);
+    end
+    for i = 1:n
+        if i <> linha then
+            c = A(i,coluna);
+            if abs(c) > 1e-9 then
+                A(i,:) = A(i,:) - c * A(linha,:);
+                escreve(msprintf("L%d -> L%d - (%s)L%d", i, i, fnum(c), linha));
+                mostra(A, m);
+            end
+        end
+    end
+    linha = linha + 1;
+    if linha > n then break; end
+end
+
+escreve("disp(""RESULTADO:"")");
+escreve("RESULTADO:");
+mostra(A, m);
+escreve("// Solução:");
+for i = 1:min(n,m)
+    escreve(msprintf("//   x%d = %s", i, fnum(A(i,m+1))));
+end
+`;
   }
 
   function buildScilabCodeJacobi(){
-    var A = matrixToScilab(state.A);
-    var b = vectorToScilabCol(state.b);
-    return SCE_HEADER +
-"A = "+A+";\n"+
-"b = "+b+";\n"+
-"n = size(A,1);\n"+
-"x = zeros(n,1) + "+fmtScilab(state.inicio)+"; // chute inicial\n"+
-"numIter = "+state.numIter+";\n\n"+
-"for k = 1:numIter\n"+
-"    X = zeros(n,1);\n"+
-"    for i = 1:n\n"+
-"        soma = 0;\n"+
-"        for j = 1:n\n"+
-"            if j <> i then\n"+
-"                soma = soma + A(i,j)*x(j);\n"+
-"            end\n"+
-"        end\n"+
-"        X(i) = (b(i) - soma) / A(i,i);\n"+
-"    end\n"+
-"    x = X;\n"+
-"    mprintf(\"Iteração %d:\\n\", k);\n"+
-"    disp(x');\n"+
-"end\n\n"+
-"mprintf(\"\\nResultado após %d iterações:\\n\", numIter);\n"+
-"for i = 1:n\n"+
-"    mprintf(\"x%d = %g\\n\", i, x(i));\n"+
-"end\n";
+    var tolMode = state.stopMode === "tol";
+    // mesma escolha de casas decimais que a interface e o PDF usam
+    var F = tolMode ? function(e){ return "ftol(" + e + ", casas)"; }
+                    : function(e){ return "fnum(" + e + ")"; };
+    var code = SCE_HEADER + SCE_HELP_BASE + (tolMode ? SCE_HELP_TOL : "");
+    code += "A = " + matrixToScilab(state.A) + ";\n";
+    code += "b = " + vectorToScilabCol(state.b) + ";\n";
+    code += "n = size(A,1);\n";
+    code += "x = zeros(n,1) + " + fmtScilab(state.inicio) + "; // chute inicial\n";
+    if (tolMode){
+      code += "tol = " + fmtScilab(state.tolerance) + "; // tolerância: para quando o erro máximo <= tol\n";
+      code += "casas = " + tolCasas(state.tolerance) + "; // casas decimais mostradas\n";
+      code += "maxIter = 1000;\n\n";
+    } else {
+      code += "maxIter = " + state.numIter + "; // número de iterações\n\n";
+    }
+    code += sceCabecalho();
+    code += String.raw`hist = x;   // uma coluna por iteração (a primeira é o chute inicial)
+erro = [];
+for k = 1:maxIter
+    X = zeros(n,1);
+    for i = 1:n
+        soma = 0;
+        for j = 1:n
+            if j <> i then
+                soma = soma + A(i,j)*x(j);
+            end
+        end
+        X(i) = (b(i) - soma) / A(i,i);
+    end
+    e = 0;
+    for i = 1:n
+        e = max(e, abs(X(i) - x(i)));
+    end
+    x = X;
+    hist = [hist, x];
+    erro = [erro, e];
+`;
+    if (tolMode) code += "    if e <= tol then break; end\n";
+    code += "end\n";
+    code += "N = size(hist,2) - 1; // iterações realizadas\n\n";
+    code += "escreve(msprintf(\"inicio = " + fmtScilab(state.inicio) + ";   num_interacoes = %d;\", N));\n";
+    code += "escreve(\"\");\n";
+    code += String.raw`for k = 1:N
+    escreve(msprintf("// Iteração %d", k));
+    for i = 1:n
+`;
+    code += "        escreve(msprintf(\"x%d = %s;\", i, " + F("hist(i,k+1)") + "));\n";
+    code += "    end\n";
+    code += "    escreve(msprintf(\"erro_maximo = %s;\", " + F("erro(k)") + "));\n";
+    code += "    escreve(\"\");\n";
+    code += "end\n\n";
+    code += "escreve(msprintf(\"// Resultado após %d iteracoes:\", N));\n";
+    code += "for i = 1:n\n";
+    code += "    escreve(msprintf(\"//   x%d = %s\", i, " + F("hist(i,N+1)") + "));\n";
+    code += "end\n";
+
+    if (lastComputation && lastComputation.diagWarn){
+      code += "escreve(\"\");\n";
+      code += sceEscreve("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
+    }
+
+    if (state.scilabChartOn){
+      code += "\nescreve(\"\");\n";
+      code += sceEscreve("// Tabela de iterações");
+      code += "T = emptystr(N+2, n+2);\n";
+      code += "T(1,1) = \"k\";\n";
+      code += "for i = 1:n\n    T(1,i+1) = \"x\" + string(i);\nend\n";
+      code += "T(1,n+2) = \"Erro Máximo\";\n";
+      code += "T(2,1) = \"0\";\n";
+      code += "for i = 1:n\n    T(2,i+1) = " + F("hist(i,1)") + ";\nend\n";
+      code += "T(2,n+2) = \"-\";\n";
+      code += "for k = 1:N\n";
+      code += "    T(k+2,1) = string(k);\n";
+      code += "    for i = 1:n\n        T(k+2,i+1) = " + F("hist(i,k+1)") + ";\n    end\n";
+      code += "    T(k+2,n+2) = " + F("erro(k)") + ";\n";
+      code += "end\n";
+      code += String.raw`w = zeros(1, n+2);
+for c = 1:n+2
+    w(c) = max(length(T(:,c)));
+end
+for r = 1:N+2
+    t = "";
+    for c = 1:n+2
+        if c == 1 then
+            t = t + T(r,c) + blanks(w(c) - length(T(r,c)));
+        else
+            t = t + "   " + blanks(w(c) - length(T(r,c))) + T(r,c);
+        end
+    end
+    escreve(t);
+end
+`;
+    }
+    return code;
+  }
+
+  function buildScilabCodeSeidel(){
+    var tolMode = state.stopMode === "tol";
+    // mesma escolha de casas decimais que a interface e o PDF usam
+    var F = tolMode ? function(e){ return "ftol(" + e + ", casas)"; }
+                    : function(e){ return "fnum(" + e + ")"; };
+    var code = SCE_HEADER + SCE_HELP_BASE + (tolMode ? SCE_HELP_TOL : "");
+    code += "A = " + matrixToScilab(state.A) + ";\n";
+    code += "b = " + vectorToScilabCol(state.b) + ";\n";
+    code += "n = size(A,1);\n";
+    code += "x = zeros(n,1) + " + fmtScilab(state.inicio) + "; // chute inicial\n";
+    if (tolMode){
+      code += "tol = " + fmtScilab(state.tolerance) + "; // tolerância: para quando o erro máximo <= tol\n";
+      code += "casas = " + tolCasas(state.tolerance) + "; // casas decimais mostradas\n";
+      code += "maxIter = 1000;\n\n";
+    } else {
+      code += "maxIter = " + state.numIter + "; // número de iterações\n\n";
+    }
+    code += sceCabecalho();
+    code += String.raw`hist = x;   // uma coluna por iteração (a primeira é o chute inicial)
+erro = [];
+for k = 1:maxIter
+    xOld = x;   // pra medir o erro máximo no final da varredura
+    for i = 1:n
+        soma = 0;
+        for j = 1:n
+            if j <> i then
+                soma = soma + A(i,j)*x(j);   // já usa o valor atualizado quando j < i
+            end
+        end
+        x(i) = (b(i) - soma) / A(i,i);   // substitui na hora (Gauss-Seidel)
+    end
+    e = 0;
+    for i = 1:n
+        e = max(e, abs(x(i) - xOld(i)));
+    end
+    hist = [hist, x];
+    erro = [erro, e];
+`;
+    if (tolMode) code += "    if e <= tol then break; end\n";
+    code += "end\n";
+    code += "N = size(hist,2) - 1; // iterações realizadas\n\n";
+    code += "escreve(msprintf(\"inicio = " + fmtScilab(state.inicio) + ";   num_interacoes = %d;\", N));\n";
+    code += "escreve(\"\");\n";
+    code += String.raw`for k = 1:N
+    escreve(msprintf("// Iteração %d", k));
+    for i = 1:n
+`;
+    code += "        escreve(msprintf(\"x%d = %s;\", i, " + F("hist(i,k+1)") + "));\n";
+    code += "    end\n";
+    code += "    escreve(msprintf(\"erro_maximo = %s;\", " + F("erro(k)") + "));\n";
+    code += "    escreve(\"\");\n";
+    code += "end\n\n";
+    code += "escreve(msprintf(\"// Resultado após %d iteracoes:\", N));\n";
+    code += "for i = 1:n\n";
+    code += "    escreve(msprintf(\"//   x%d = %s\", i, " + F("hist(i,N+1)") + "));\n";
+    code += "end\n";
+
+    if (lastComputation && lastComputation.diagWarn){
+      code += "escreve(\"\");\n";
+      code += sceEscreve("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
+    }
+
+    if (state.scilabChartOn){
+      code += "\nescreve(\"\");\n";
+      code += sceEscreve("// Tabela de iterações");
+      code += "T = emptystr(N+2, n+2);\n";
+      code += "T(1,1) = \"k\";\n";
+      code += "for i = 1:n\n    T(1,i+1) = \"x\" + string(i);\nend\n";
+      code += "T(1,n+2) = \"Erro Máximo\";\n";
+      code += "T(2,1) = \"0\";\n";
+      code += "for i = 1:n\n    T(2,i+1) = " + F("hist(i,1)") + ";\nend\n";
+      code += "T(2,n+2) = \"-\";\n";
+      code += "for k = 1:N\n";
+      code += "    T(k+2,1) = string(k);\n";
+      code += "    for i = 1:n\n        T(k+2,i+1) = " + F("hist(i,k+1)") + ";\n    end\n";
+      code += "    T(k+2,n+2) = " + F("erro(k)") + ";\n";
+      code += "end\n";
+      code += String.raw`w = zeros(1, n+2);
+for c = 1:n+2
+    w(c) = max(length(T(:,c)));
+end
+for r = 1:N+2
+    t = "";
+    for c = 1:n+2
+        if c == 1 then
+            t = t + T(r,c) + blanks(w(c) - length(T(r,c)));
+        else
+            t = t + "   " + blanks(w(c) - length(T(r,c))) + T(r,c);
+        end
+    end
+    escreve(t);
+end
+`;
+    }
+    return code;
   }
 
   function buildScilabCodeLu(){
     var lu = lastComputation && lastComputation.run;
     if (!lu) return "";
-    var code = SCE_HEADER;
-    code += "A = "+matrixToScilab(lu.A)+";\n";
-    code += "b = "+vectorToScilabCol(lu.b)+";\n";
-    code += "n = "+lu.n+";\n";
-    code += "L = eye(n,n);\n\n";
+    return SCE_HEADER + SCE_HELP_BASE + SCE_HELP_MATRIZ +
+"A = " + matrixToScilab(lu.A) + ";\n" +
+"b = " + vectorToScilabCol(lu.b) + ";\n" +
+"n = size(A,1);\n\n" +
+sceCabecalho() +
+String.raw`escreve("-->A");
+mostra(A, -1);
 
-    lu.etapas.forEach(function(e){
-      code += "// Etapa "+e.k+" — pivo a"+e.k+e.k+" = "+fmt(e.pivo)+"\n";
-      e.mults.forEach(function(mm){
-        code += "// L"+mm.i+" -> L"+mm.i+" - m"+mm.i+mm.k+"*L"+mm.k+"   m"+mm.i+mm.k+" = "+fmt(mm.m)+"\n";
-        code += "L("+mm.i+","+mm.k+") = "+fmtScilab(mm.m)+";\n";
-        code += "A("+mm.i+",:) = A("+mm.i+",:) - "+fmtScilab(mm.m)+"*A("+mm.k+",:);\n";
-      });
-      code += "disp(A);\n\n";
-    });
+L = eye(n,n);
+ok = %t;
+for k = 1:n-1
+    pivo = A(k,k);
+    if abs(pivo) < 1e-12 then
+        escreve(msprintf("O pivô a%d%d ficou igual a zero - a fatoração LU sem troca de linhas não é possível para esta matriz.", k, k));
+        ok = %f;
+        break;
+    end
+    escreve(msprintf("// Etapa %d - pivo a%d%d = %s", k, k, k, fnum(pivo)));
+    for i = k+1:n
+        m = A(i,k) / pivo;
+        L(i,k) = m;
+        A(i,k:n) = A(i,k:n) - m * A(k,k:n);
+        A(i,k) = 0;
+        escreve(msprintf("L%d -> L%d - m%d%d*L%d   m%d%d = %s", i, i, i, k, k, i, k, fnum(m)));
+    end
+    mostra(A, -1);
+end
 
-    code += "U = A;\n\n";
-    code += "mprintf(\"L =\\n\"); disp(L);\n";
-    code += "mprintf(\"U =\\n\"); disp(U);\n\n";
+if ok then
+    U = A;
+    escreve("-->L");
+    mostra(L, -1);
+    escreve("-->U");
+    mostra(U, -1);
+    escreve("-->L*U   // conferencia: deve reproduzir A");
+    mostra(L*U, -1);
 
-    code += "// L*y = b (substituicao para frente)\n";
-    code += "y = zeros(n,1);\n";
-    lu.yDetail.forEach(function(d){
-      code += "// "+scLuForward(d)+"\n";
-      code += "y("+d.i+") = "+fmtScilab(d.result)+";\n";
-    });
-    code += "\n";
+    escreve("// L*y = b  (substituicao para frente)");
+    y = zeros(n,1);
+    for r = 1:n
+        soma = 0;
+        t = "y" + string(r) + " = " + fnum(b(r));
+        for c = 1:r-1
+            soma = soma + L(r,c)*y(c);
+            if L(r,c) >= 0 then
+                t = t + " - " + fnum(L(r,c)) + "*y" + string(c);
+            else
+                t = t + " + " + fnum(-L(r,c)) + "*y" + string(c);
+            end
+        end
+        y(r) = b(r) - soma;
+        escreve(t + "  =  " + fnum(y(r)));
+    end
+    escreve("");
 
-    code += "// U*x = y (substituicao para tras)\n";
-    code += "x = zeros(n,1);\n";
-    lu.xDetail.slice().reverse().forEach(function(d){
-      code += "// "+scLuBack(d)+"\n";
-      code += "x("+d.i+") = "+fmtScilab(d.result)+";\n";
-    });
-    code += "\n";
+    escreve("// U*x = y  (substituicao para tras)");
+    x = zeros(n,1);
+    for r = n:-1:1
+        soma = 0;
+        t = "x" + string(r) + " = (" + fnum(y(r));
+        for c = r+1:n
+            soma = soma + U(r,c)*x(c);
+            if U(r,c) >= 0 then
+                t = t + " - " + fnum(U(r,c)) + "*x" + string(c);
+            else
+                t = t + " + " + fnum(-U(r,c)) + "*x" + string(c);
+            end
+        end
+        x(r) = (y(r) - soma) / U(r,r);
+        escreve(t + ") / (" + fnum(U(r,r)) + ")  =  " + fnum(x(r)));
+    end
+    escreve("");
 
-    code += "mprintf(\"\\nSolucao do sistema:\\n\");\n";
-    for (var li=0; li<lu.n; li++){
-      code += "mprintf(\"x"+(li+1)+" = %g\\n\", x("+(li+1)+"));\n";
-    }
-    return code;
+    escreve("// Solução:");
+    for i = 1:n
+        escreve(msprintf("//   x%d = %s", i, fnum(x(i))));
+    end
+end
+`;
   }
 
   function buildScilabCode(){
     if (!lastComputation) return "";
     if (state.method === "gauss") return buildScilabCodeGauss();
     if (state.method === "lu") return buildScilabCodeLu();
+    if (state.method === "seidel") return buildScilabCodeSeidel();
     return buildScilabCodeJacobi();
   }
 
@@ -2211,7 +2663,7 @@
   });
 
   document.getElementById("btnScilabDownload").addEventListener("click", async function(){
-    var nomeMetodo = state.method === "gauss" ? "gauss-jordan" : state.method === "lu" ? "fatoracao-lu" : "jacobi";
+    var nomeMetodo = state.method === "gauss" ? "gauss-jordan" : state.method === "lu" ? "fatoracao-lu" : state.method === "seidel" ? "gauss-seidel" : "jacobi";
     var filename = nomeMetodo + ".sce";
     var blob = new Blob([scilabCodeAreaEl.value], {type:"text/plain"});
     try{
@@ -2431,7 +2883,7 @@
       el.classList.toggle("active", el.dataset.method === state.method);
     });
     document.querySelector('input[name="method"][value="'+state.method+'"]').checked = true;
-    document.getElementById("jacobiParams").style.display = state.method === "jacobi" ? "flex" : "none";
+    document.getElementById("jacobiParams").style.display = (state.method === "jacobi" || state.method === "seidel") ? "flex" : "none";
     document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
     document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("rowsVal").textContent = state.rows;
@@ -2447,6 +2899,7 @@
     headerFieldsEl.style.display = state.headerOn ? "block" : "none";
     headerNameEl.value = state.headerName || "";
     headerQuestionEl.value = state.headerQuestion || "";
+    chkScilabChartEl.checked = !!state.scilabChartOn;
     buildEditor();
     render();
   }
