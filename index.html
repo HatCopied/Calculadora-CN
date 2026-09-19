@@ -225,6 +225,9 @@
   .checkbox-row{ display:flex; align-items:center; gap:9px; }
   .checkbox-row input{ width:15px; height:15px; accent-color: var(--brass); cursor:pointer; }
   .checkbox-row label{ font-size: 13px; color: var(--ink); cursor:pointer; }
+  .opt-stack{ display:flex; flex-direction:column; gap:4px; margin-top:8px; }
+  .opt-stack .checkbox-row{ gap:7px; }
+  .opt-stack .checkbox-row label{ font-size: 12px; line-height:1.15; }
   #headerFields{ margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }
 
   .btn{
@@ -479,7 +482,7 @@
                 <button type="button" data-act="cols+" aria-label="aumentar colunas">+</button>
               </div>
             </div>
-            <div class="hint" id="dimsHint">A última coluna é o vetor b.</div>
+            <div class="hint" id="dimsHint">A última coluna é o vetor b. Máximo: 6×6.</div>
 
             <div id="jacobiParams" style="display:none;">
               <div class="field-row">
@@ -506,13 +509,19 @@
                 <label>Tolerância</label>
                 <input type="number" class="param" id="tolInput" value="0.001" min="1e-15" step="any" style="width:100%;">
               </div>
-              <div class="checkbox-row" style="margin-top:10px;">
-                <input type="checkbox" id="chkScilabChart">
-                <label for="chkScilabChart">Incluir gráfico de convergência no final do PDF (Versão Scilab)</label>
-              </div>
-              <div class="checkbox-row" style="margin-top:8px;">
-                <input type="checkbox" id="chkConv">
-                <label for="chkConv">Verificar convergência (mostrar a prova)</label>
+              <div class="opt-stack">
+                <div class="checkbox-row">
+                  <input type="checkbox" id="chkScilabChart">
+                  <label for="chkScilabChart" title="Tabela de iterações no final do PDF (sempre 10 linhas: 0 a 5 e as 4 últimas)">Inserir gráfico</label>
+                </div>
+                <div class="checkbox-row">
+                  <input type="checkbox" id="chkConv">
+                  <label for="chkConv" title="Mostra a prova de convergência (na tela e no final da questão no PDF)">Verificar convergência</label>
+                </div>
+                <div class="checkbox-row">
+                  <input type="checkbox" id="chkEncurtar">
+                  <label for="chkEncurtar" title="Questões com mais de 10 iterações: só as 5 primeiras, as 5 últimas e a solução">Encurtar download</label>
+                </div>
               </div>
             </div>
           </div>
@@ -618,6 +627,7 @@
   // ---------- state ----------
   // limite de iterações do modo tolerância (site, PDFs e código .sce usam este mesmo valor)
   var MAX_ITER = 3000;
+  var MAX_DIM = 6; // trava: matriz até 6x6
   var state = {
     method: "gauss",
     rows: 4, cols: 3,     // gauss: rows x (cols+1) augmented
@@ -626,7 +636,8 @@
     inicio: 0, numIter: 10, stopMode: "iter", tolerance: 0.001,
     headerOn: false, headerName: "", headerQuestion: "",
     scilabChartOn: false,
-    checkConv: false
+    checkConv: false,
+    encurtar: false
   };
 
   function mk(rows, cols, fill){
@@ -1793,11 +1804,26 @@ if rhoOk then
 
   var lastComputation = null;
 
+  function matrizVazia(){
+    var zero = function(v){ return !Number(v); };
+    return state.A.every(function(r){ return r.every(zero); }) &&
+           (state.method === "gauss" || (state.b || []).every(zero));
+  }
+
   function render(){
     document.getElementById("stepsHead").textContent =
       state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
       state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" :
       state.method === "seidel" ? "PASSO A PASSO — GAUSS-SEIDEL" : "PASSO A PASSO — JACOBI";
+    if (matrizVazia()){
+      // matriz zerada (ex.: depois de "Limpar"): nada de cálculo, nem 3000 iterações
+      lastComputation = null;
+      document.getElementById("stepsBody").innerHTML = '<div class="empty-state">Preencha a matriz ao lado para ver os passos aparecerem aqui.</div>';
+      document.getElementById("btnPdfScilab").disabled = true;
+      document.getElementById("btnPreviewOne").disabled = true;
+      document.getElementById("btnScilabCode").disabled = true;
+      return;
+    }
     if (state.method === "lu"){
       var lurun = luSteps(state.A, state.b);
       lastComputation = {method:"lu", run:lurun};
@@ -1836,7 +1862,41 @@ if rhoOk then
   }
 
   // ---------- controls ----------
+  // Trocar de método NÃO zera a matriz: o mesmo sistema é convertido entre os formatos.
+  //   Escalonamento guarda [A | b] junto (linhas x (colunas+1));
+  //   Jacobi / Gauss-Seidel / LU guardam A (n x n) e b separados.
+  // Antes, as dimensões de um método eram aplicadas ao outro, então a matriz era cortada
+  // e recriada com zeros (diagonal zerada -> Jacobi rodava até o limite de iterações).
+  function converterParaQuadrado(){
+    var R = state.rows, C = state.cols, old = state.A;
+    var n = Math.max(2, Math.min(R, C, MAX_DIM));
+    var A = mk(n, n, 0), b = new Array(n).fill(0);
+    for (var i=0;i<n;i++){
+      for (var j=0;j<n;j++){ if (old[i] && old[i][j] !== undefined) A[i][j] = old[i][j]; }
+      if (old[i] && old[i][C] !== undefined) b[i] = old[i][C];
+    }
+    state.jn = n; state.A = A; state.b = b;
+  }
+  function converterParaGauss(){
+    var n = state.jn, old = state.A, oldB = state.b || [];
+    var A = mk(n, n+1, 0);
+    for (var i=0;i<n;i++){
+      for (var j=0;j<n;j++){ if (old[i] && old[i][j] !== undefined) A[i][j] = old[i][j]; }
+      A[i][n] = oldB[i] !== undefined ? oldB[i] : 0;
+    }
+    state.rows = n; state.cols = n; state.A = A;
+  }
+
+  function syncDimsHint(m){
+    var h = document.getElementById("dimsHint");
+    h.textContent = m === "gauss" ? "A última coluna é o vetor b (termos independentes). Máximo: 6×6." : "";
+    h.style.display = m === "gauss" ? "" : "none";
+  }
+
   function setMethod(m){
+    var prev = state.method;
+    if (prev === "gauss" && m !== "gauss" && state.A && state.A.length) converterParaQuadrado();
+    else if (prev !== "gauss" && m === "gauss" && state.A && state.A.length) converterParaGauss();
     state.method = m;
     document.querySelectorAll(".method-opt").forEach(function(el){
       el.classList.toggle("active", el.dataset.method === m);
@@ -1844,9 +1904,7 @@ if rhoOk then
     document.getElementById("jacobiParams").style.display = (m === "jacobi" || m === "seidel") ? "flex" : "none";
     document.getElementById("rowsField").style.display = m === "gauss" ? "flex" : "none";
     document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
-    document.getElementById("dimsHint").textContent = m === "gauss"
-      ? "A última coluna é o vetor b (termos independentes)."
-      : "Sistema quadrado A (n×n) — o vetor b aparece ao lado da matriz.";
+    syncDimsHint(m);
     if (m !== "gauss"){ document.getElementById("colsVal").textContent = state.jn; }
     else { document.getElementById("colsVal").textContent = state.cols; document.getElementById("rowsVal").textContent = state.rows; }
     buildEditor(); render(); saveLocal();
@@ -1864,14 +1922,14 @@ if rhoOk then
     var act = btn.dataset.act;
     if (state.method === "gauss"){
       if (act === "rows-") state.rows = Math.max(2, state.rows-1);
-      if (act === "rows+") state.rows = Math.min(8, state.rows+1);
+      if (act === "rows+") state.rows = Math.min(MAX_DIM, state.rows+1);
       if (act === "cols-") state.cols = Math.max(1, state.cols-1);
-      if (act === "cols+") state.cols = Math.min(7, state.cols+1);
+      if (act === "cols+") state.cols = Math.min(MAX_DIM, state.cols+1);
       document.getElementById("rowsVal").textContent = state.rows;
       document.getElementById("colsVal").textContent = state.cols;
     } else {
       if (act === "cols-") state.jn = Math.max(2, state.jn-1);
-      if (act === "cols+") state.jn = Math.min(7, state.jn+1);
+      if (act === "cols+") state.jn = Math.min(MAX_DIM, state.jn+1);
       document.getElementById("colsVal").textContent = state.jn;
     }
     buildEditor(); render(); saveLocal();
@@ -1956,6 +2014,13 @@ if rhoOk then
   var chkScilabChartEl = document.getElementById("chkScilabChart");
   chkScilabChartEl.addEventListener("change", function(){
     state.scilabChartOn = chkScilabChartEl.checked;
+    saveLocal();
+  });
+
+  // "Encurtar o download": só afeta PDF e Visualizar (nunca a tela nem o .sce)
+  var chkEncurtarEl = document.getElementById("chkEncurtar");
+  chkEncurtarEl.addEventListener("change", function(){
+    state.encurtar = chkEncurtarEl.checked;
     saveLocal();
   });
 
@@ -2391,6 +2456,31 @@ if rhoOk then
 
   // items (opcional): lista de {st, comp} pra juntar várias questões num PDF só.
   // sem argumento, desenha só a questão atual (comportamento de sempre).
+  // ---------- "Encurtar o download" ----------
+  // Cada questão é avaliada pelo SEU número de iterações: até 10 não muda nada;
+  // acima disso ficam as 5 primeiras, um aviso e as 5 últimas (a solução final sempre aparece).
+  var ENCURTAR_MAX = 10, ENCURTAR_KEEP = 5;
+  function encurtarLista(list, on){
+    if (!on || list.length <= ENCURTAR_MAX) return list.map(function(x){ return {v:x}; });
+    var n = list.length, out = [], i;
+    for (i=0;i<ENCURTAR_KEEP;i++) out.push({v:list[i]});
+    out.push({omit: n - 2*ENCURTAR_KEEP, from: ENCURTAR_KEEP + 1, to: n - ENCURTAR_KEEP});
+    for (i=n-ENCURTAR_KEEP;i<n;i++) out.push({v:list[i]});
+    return out;
+  }
+  function encurtarAviso(o){
+    if (o.omit === 1) return "// ... 1 iteração omitida (a " + o.from + ") ...";
+    return "// ... " + o.omit + " iterações omitidas (da " + o.from + " à " + o.to + ") ...";
+  }
+
+  // Tabela de iterações ("Inserir gráfico"): sempre no máximo 10 linhas —
+  // k = 0,1,2,3,4,5 e as 4 últimas iterações; o pulo no meio não tem aviso nenhum.
+  // Independe do "Encurtar download". Se já couber em 10 linhas, mostra tudo.
+  function graficoIteracoes(iters){
+    if (iters.length + 1 <= 10) return iters;
+    return iters.slice(0, 5).concat(iters.slice(-4));
+  }
+
   function buildScilabPdf(items){
     items = items || [{st: state, comp: lastComputation}];
     if (!items.length || !items[0].comp) return;
@@ -2527,7 +2617,9 @@ if rhoOk then
         var jf2 = jacobiFmt(run);
         line("inicio = "+st.inicio+";   num_interacoes = "+run.iterations.length+";");
         blank(6);
-        run.iterations.forEach(function(it){
+        encurtarLista(run.iterations, st.encurtar).forEach(function(e){
+          if (e.omit){ line(encurtarAviso(e)); blank(6); return; }
+          var it = e.v;
           line("// Iteração "+(it.k+1));
           it.detail.forEach(function(d){ line("x"+(d.i+1)+" = "+jf2(d.result)+";"); });
           line("erro_maximo = "+jf2(it.err)+";");
@@ -2561,7 +2653,7 @@ if rhoOk then
           for (var t0=0; t0<run.n; t0++) r0.push(jf2(run.historico[0][t0]));
           r0.push("-");
           rowsT.push(r0);
-          run.iterations.forEach(function(it){
+          graficoIteracoes(run.iterations).forEach(function(it){
             var rr = [String(it.k+1)];
             for (var t2=0; t2<run.n; t2++) rr.push(jf2(it.x[t2]));
             rr.push(jf2(it.err));
@@ -2719,7 +2811,9 @@ if rhoOk then
         var jf2 = jacobiFmt(run);
         push("inicio = "+st.inicio+";   num_interacoes = "+run.iterations.length+";");
         blankLine();
-        run.iterations.forEach(function(it){
+        encurtarLista(run.iterations, st.encurtar).forEach(function(e){
+          if (e.omit){ push(encurtarAviso(e)); blankLine(); return; }
+          var it = e.v;
           push("// Iteração "+(it.k+1));
           it.detail.forEach(function(d){ push("x"+(d.i+1)+" = "+jf2(d.result)+";"); });
           push("erro_maximo = "+jf2(it.err)+";");
@@ -2746,7 +2840,7 @@ if rhoOk then
           for (var t0=0; t0<run.n; t0++) r0.push(jf2(run.historico[0][t0]));
           r0.push("-");
           rowsT.push(r0);
-          run.iterations.forEach(function(it){
+          graficoIteracoes(run.iterations).forEach(function(it){
             var rr = [String(it.k+1)];
             for (var t2=0; t2<run.n; t2++) rr.push(jf2(it.x[t2]));
             rr.push(jf2(it.err));
@@ -3037,7 +3131,8 @@ if rhoOk then
   }
 
   function savedItems(){
-    return savedQuestions.map(function(q){ return {st: q.st, comp: computeFor(q.st)}; });
+    // "encurtar" vale o que está marcado AGORA; cada questão é julgada pelo próprio nº de iterações
+    return savedQuestions.map(function(q){ return {st: Object.assign({}, q.st, {encurtar: state.encurtar}), comp: computeFor(q.st)}; });
   }
 
   document.getElementById("btnAllScilab").addEventListener("click", async function(){
@@ -3641,8 +3736,8 @@ end
       if (!data || !Array.isArray(data.matrix) || !data.matrix.length || !Array.isArray(data.matrix[0])){
         throw {code:"invalid_json"};
       }
-      var rows = Math.max(2, Math.min(8, data.matrix.length));
-      var cols = Math.max(1, Math.min(7, data.matrix[0].length - 1));
+      var rows = Math.max(2, Math.min(MAX_DIM, data.matrix.length));
+      var cols = Math.max(1, Math.min(MAX_DIM, data.matrix[0].length - 1));
       state.rows = rows; state.cols = cols;
       state.A = data.matrix.slice(0, rows).map(function(r){ return r.slice(0, cols+1).map(function(v){ return Number(v) || 0; }); });
       document.getElementById("rowsVal").textContent = state.rows;
@@ -3650,7 +3745,7 @@ end
     } else {
       var n0 = data && (data.n || (Array.isArray(data.A) && data.A.length));
       if (!data || !Array.isArray(data.A) || !n0) throw {code:"invalid_json"};
-      var n = Math.max(2, Math.min(7, n0));
+      var n = Math.max(2, Math.min(MAX_DIM, n0));
       state.jn = n;
       state.A = data.A.slice(0, n).map(function(r){ return (r||[]).slice(0, n).map(function(v){ return Number(v) || 0; }); });
       var bArr = Array.isArray(data.b) ? data.b : [];
@@ -3704,15 +3799,15 @@ end
     rows = rows.map(function(r){ r = r.slice(0, maxLen); while (r.length < maxLen) r.push(0); return r; });
 
     if (state.method === "gauss"){
-      var rCount = Math.max(2, Math.min(8, rows.length));
-      var cCount = Math.max(1, Math.min(7, maxLen-1));
+      var rCount = Math.max(2, Math.min(MAX_DIM, rows.length));
+      var cCount = Math.max(1, Math.min(MAX_DIM, maxLen-1));
       state.rows = rCount; state.cols = cCount;
       state.A = rows.slice(0, rCount).map(function(r){ return r.slice(0, cCount+1); });
       document.getElementById("rowsVal").textContent = state.rows;
       document.getElementById("colsVal").textContent = state.cols;
     } else {
       var n, hasB = (maxLen === rows.length + 1);
-      n = Math.max(2, Math.min(7, rows.length));
+      n = Math.max(2, Math.min(MAX_DIM, rows.length));
       state.jn = n;
       state.A = rows.slice(0, n).map(function(r){ return r.slice(0, n); });
       state.b = hasB ? rows.slice(0, n).map(function(r){ return r[n]; }) : new Array(n).fill(0);
@@ -3773,6 +3868,11 @@ end
   // ---------- boot ----------
   function boot(){
     var restored = loadLocal();
+    if (restored){
+      state.rows = Math.min(state.rows, MAX_DIM); state.cols = Math.min(state.cols, MAX_DIM); state.jn = Math.min(state.jn, MAX_DIM);
+      if (state.method === "gauss"){ if (state.A && state.A.length) resizeGauss(); }
+      else if (state.A && state.A.length){ resizeJacobi(); }
+    }
     if (!restored){
       state.A = mk(state.rows, state.cols+1, 0);
       state.b = [];
@@ -3787,6 +3887,7 @@ end
     document.querySelector('input[name="method"][value="'+state.method+'"]').checked = true;
     document.getElementById("jacobiParams").style.display = (state.method === "jacobi" || state.method === "seidel") ? "flex" : "none";
     document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
+    syncDimsHint(state.method);
     document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("rowsVal").textContent = state.rows;
     document.getElementById("colsVal").textContent = state.method === "gauss" ? state.cols : state.jn;
@@ -3803,6 +3904,7 @@ end
     headerQuestionEl.value = state.headerQuestion || "";
     chkScilabChartEl.checked = !!state.scilabChartOn;
     chkConvEl.checked = !!state.checkConv;
+    chkEncurtarEl.checked = !!state.encurtar;
     buildEditor();
     render();
   }
