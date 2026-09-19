@@ -26,6 +26,8 @@
     --teal-tint: #DCEAE6;
     --danger: #A5333B;
     --danger-tint: #F4DEDF;
+    --sky: #2A6FA8;
+    --sky-tint: #DCEAF6;
     --shadow: rgba(22,35,59,.10);
     --radius: 3px;
     color-scheme: light;
@@ -45,6 +47,8 @@
     --teal-tint: #142924;
     --danger: #E28086;
     --danger-tint: #2B1618;
+    --sky: #6BB1E8;
+    --sky-tint: #16283A;
     --shadow: rgba(0,0,0,.35);
     color-scheme: dark;
   }
@@ -64,6 +68,8 @@
       --teal-tint: #142924;
       --danger: #E28086;
       --danger-tint: #2B1618;
+      --sky: #6BB1E8;
+      --sky-tint: #16283A;
       color-scheme: dark;
     }
   }
@@ -237,6 +243,10 @@
     background: var(--teal-tint); color: var(--teal); border: 1px solid var(--teal);
   }
   .btn.ghost.btn-scilab:hover{ filter: brightness(1.05); border-color: var(--teal); color: var(--teal); }
+  .btn.ghost.btn-preview{
+    background: var(--sky-tint); color: var(--sky); border: 1px solid var(--sky);
+  }
+  .btn.ghost.btn-preview:hover{ filter: brightness(1.05); border-color: var(--sky); color: var(--sky); }
   .btn.ghost.btn-scicode{
     background: var(--brass-tint); color: var(--brass-deep); border: 1px solid var(--brass);
   }
@@ -272,6 +282,16 @@
   }
   .modal-actions{ display:flex; gap:8px; padding: 12px 18px 16px; border-top: 1px solid var(--line-soft); }
   .modal-actions .btn{ flex:1; }
+
+  /* Modal de visualização/edição do texto antes do PDF */
+  .modal-box.wide{ max-width: 920px; }
+  #previewTextArea{
+    width:100%; min-height: 420px; resize: vertical; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); color: var(--ink); font-family:"JetBrains Mono"; font-size: 12px; line-height:1.5;
+    padding: 10px; box-sizing: border-box; white-space: pre; overflow:auto;
+  }
+  .modal-actions.stacked{ flex-direction:column; }
+  .modal-actions.stacked .btn-row{ width:100%; }
 
   .hint{ font-size: 11.5px; color: var(--ink-faint); margin-top: 6px; line-height:1.4; }
 
@@ -426,6 +446,7 @@
             <button class="btn ghost" id="btnClear" type="button">Limpar</button>
           </div>
           <div class="btn-row" style="margin-bottom:8px;">
+            <button class="btn ghost btn-preview" id="btnPreviewOne" type="button" disabled title="Abre o texto editável antes de baixar">Visualizar</button>
             <button class="btn ghost btn-scilab" id="btnPdfScilab" type="button" disabled title="Impressão no estilo do console do Scilab">Baixar PDF</button>
           </div>
           <div class="btn-row" style="margin-bottom:8px;">
@@ -537,6 +558,7 @@
           <div class="saved-list" id="savedList"></div>
           <div class="saved-lead">Baixar todas num PDF só:</div>
           <div class="btn-row">
+            <button class="btn ghost btn-preview" id="btnPreviewAll" type="button" title="Abre o texto editável antes de baixar">Visualizar</button>
             <button class="btn ghost btn-scilab" id="btnAllScilab" type="button">Baixar PDF</button>
           </div>
         </div>
@@ -561,6 +583,26 @@
     <div class="modal-actions">
       <button class="btn ghost" id="btnScilabCopy" type="button">Copiar código</button>
       <button class="btn" id="btnScilabDownload" type="button">Baixar .sce</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="previewModal">
+  <div class="modal-box wide">
+    <div class="modal-head">
+      <h3 id="previewModalTitle">Visualizar</h3>
+      <button class="modal-close" id="previewModalClose" type="button" aria-label="fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" id="previewHint">Texto exatamente como sai no PDF — edite à vontade (comentários, uma observação, o que precisar) e baixe do jeito que ficou.</div>
+      <textarea id="previewTextArea" spellcheck="false"></textarea>
+    </div>
+    <div class="modal-actions stacked">
+      <div class="btn-row">
+        <button class="btn ghost" id="btnPreviewReset" type="button" title="Descarta suas edições e recarrega o texto original">Restaurar original</button>
+        <button class="btn ghost" id="btnPreviewCopy" type="button">Copiar texto</button>
+      </div>
+      <button class="btn" id="btnPreviewDownload" type="button">Baixar PDF</button>
     </div>
   </div>
 </div>
@@ -1218,6 +1260,7 @@
       renderLuSteps(lurun);
       
       document.getElementById("btnPdfScilab").disabled = false;
+      document.getElementById("btnPreviewOne").disabled = false;
       document.getElementById("btnScilabCode").disabled = false;
       return;
     }
@@ -1240,6 +1283,7 @@
     }
     
     document.getElementById("btnPdfScilab").disabled = false;
+    document.getElementById("btnPreviewOne").disabled = false;
     document.getElementById("btnScilabCode").disabled = false;
   }
 
@@ -2014,6 +2058,275 @@
     return doc;
   }
 
+  // ---------- versão em TEXTO PURO do PDF Scilab (pro modal "Visualizar") ----------
+  // Reaproveita as mesmas funções de formatação (scDesc, scLuForward, scLuBack,
+  // jacobiFmt, fmt, scMatrixLines) que o buildScilabPdf usa — NENHUM cálculo é
+  // refeito aqui, só o mesmo conteúdo é escrito como linhas de texto em vez de
+  // desenhado no PDF. items: mesmo formato de buildScilabPdf.
+  function buildScilabText(items){
+    items = items || [{st: state, comp: lastComputation}];
+    if (!items.length || !items[0].comp) return "";
+    var out = [];
+    function push(s){ out.push(s); }
+    function blankLine(){ out.push(""); }
+    function matrixLines(mtx, augAt){
+      scMatrixLines(mtx, augAt).forEach(function(r){ push("    "+r); });
+    }
+
+    function drawQuestionText(st, comp){
+      if (st.headerOn){
+        var today = new Date();
+        var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
+        var rule = "// "+Array(64).join("-");
+        push(rule);
+        push("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
+        push("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
+        push("// Professora: Lucélia Radin");
+        push("// Aluno(a): "+(st.headerName || "_________________________"));
+        push("// Data: "+dateStr);
+        push(rule);
+        blankLine();
+      }
+
+      var questionTitle = st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão";
+      push("// "+questionTitle);
+      blankLine();
+
+      if (comp.method === "gauss"){
+        var todos = comp.steps;
+        push("-->A");
+        matrixLines(todos[0].matrix, st.cols);
+        blankLine();
+        todos.slice(1).forEach(function(s){
+          if (s.type === "skip") return;
+          if (s.type === "final") return;
+          push(scDesc(s));
+          matrixLines(s.matrix, st.cols);
+          blankLine();
+        });
+        push('disp("RESULTADO:")');
+        push("RESULTADO:");
+        var last = todos[todos.length-1];
+        matrixLines(last.matrix, st.cols);
+        blankLine();
+        var n = last.matrix.length, m = st.cols;
+        push("// Solução:");
+        for (var i=0;i<Math.min(n,m);i++) push("//   x"+(i+1)+" = "+fmt(last.matrix[i][m]));
+      } else if (comp.method === "lu"){
+        var lu = comp.run;
+        push("-->A");
+        matrixLines(lu.A);
+        blankLine();
+        lu.etapas.forEach(function(e){
+          push("// Etapa "+e.k+" — pivo a"+e.k+e.k+" = "+fmt(e.pivo));
+          e.mults.forEach(function(mm){
+            push("L"+mm.i+" -> L"+mm.i+" - m"+mm.i+mm.k+"*L"+mm.k+"   m"+mm.i+mm.k+" = "+fmt(mm.m));
+          });
+          matrixLines(e.matrix);
+          blankLine();
+        });
+        if (lu.falhou){
+          push(lu.falhou);
+        } else {
+          push("-->L");
+          matrixLines(lu.L);
+          blankLine();
+          push("-->U");
+          matrixLines(lu.U);
+          blankLine();
+          push("-->L*U   // conferencia: deve reproduzir A");
+          matrixLines(lu.LU);
+          blankLine();
+          push("// L*y = b  (substituicao para frente)");
+          lu.yDetail.forEach(function(d){ push(scLuForward(d)); });
+          blankLine();
+          push("// U*x = y  (substituicao para tras)");
+          lu.xDetail.slice().reverse().forEach(function(d){ push(scLuBack(d)); });
+          blankLine();
+          push("// Solução:");
+          for (var li=0; li<lu.n; li++) push("//   x"+(li+1)+" = "+fmt(lu.x[li]));
+        }
+      } else {
+        var run = comp.run;
+        var jf2 = jacobiFmt(run);
+        push("inicio = "+st.inicio+";   num_interacoes = "+run.iterations.length+";");
+        blankLine();
+        run.iterations.forEach(function(it){
+          push("// Iteração "+(it.k+1));
+          it.detail.forEach(function(d){ push("x"+(d.i+1)+" = "+jf2(d.result)+";"); });
+          push("erro_maximo = "+jf2(it.err)+";");
+          blankLine();
+        });
+        var lastX = run.historico[run.historico.length-1];
+        push("// Resultado após "+run.iterations.length+" iteracoes:");
+        for (var vi=0; vi<run.n; vi++) push("//   x"+(vi+1)+" = "+jf2(lastX[vi]));
+        if (comp.diagWarn){
+          blankLine();
+          push("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
+        }
+        if (st.scilabChartOn){
+          blankLine();
+          push("// Tabela de iterações");
+          blankLine();
+          var headT = ["k"];
+          for (var tx=0; tx<run.n; tx++) headT.push("x"+(tx+1));
+          headT.push("Erro Máximo");
+          var rowsT = [];
+          var r0 = ["0"];
+          for (var t0=0; t0<run.n; t0++) r0.push(jf2(run.historico[0][t0]));
+          r0.push("-");
+          rowsT.push(r0);
+          run.iterations.forEach(function(it){
+            var rr = [String(it.k+1)];
+            for (var t2=0; t2<run.n; t2++) rr.push(jf2(it.x[t2]));
+            rr.push(jf2(it.err));
+            rowsT.push(rr);
+          });
+          var wT = headT.map(function(h, c){
+            var mx = h.length;
+            rowsT.forEach(function(r){ if (r[c].length > mx) mx = r[c].length; });
+            return mx;
+          });
+          function fmtRowT(r){
+            return r.map(function(v, c){ return c === 0 ? v.padEnd(wT[c]) : v.padStart(wT[c]); }).join("   ");
+          }
+          push("    "+fmtRowT(headT));
+          rowsT.forEach(function(r){ push("    "+fmtRowT(r)); });
+        }
+      }
+    }
+
+    items.forEach(function(it, idx){
+      if (idx > 0){
+        blankLine();
+        push(Array(71).join("-"));
+        blankLine();
+      }
+      drawQuestionText(it.st, it.comp);
+    });
+
+    return out.join("\n");
+  }
+
+  // ---------- gera um PDF a partir de um texto qualquer (usado pelo modal "Visualizar") ----------
+  // Não recalcula nada — só imprime, linha por linha, o texto recebido (o
+  // original ou já editado pelo usuário). Usa a MESMA regra de fontes do
+  // buildScilabPdf original: prompts "-->..." e linhas de matriz (que o
+  // buildScilabText sempre indenta com 4 espaços) em Courier monoespaçado;
+  // o resto (comentários, fórmulas, texto livre que o usuário digitar) em
+  // Helvetica — pra ficar visualmente idêntico ao "Baixar PDF" de sempre.
+  function buildPdfFromText(text){
+    var jsPDF = window.jspdf.jsPDF;
+    var doc = new jsPDF({unit:"pt", format:"a4"});
+    var pageW = doc.internal.pageSize.getWidth();
+    var pageH = doc.internal.pageSize.getHeight();
+    var margin = 72;
+    var avail = pageW - margin*2;
+    var INK = [20,20,20], SOFT = [110,110,110];
+
+    function asciiClean(s){
+      return String(s)
+        .replace(/[\u2212\u2013\u2014]/g, "-")
+        .replace(/\u2192/g, "->")
+        .replace(/\u2194/g, "<->")
+        .replace(/\u00F7/g, "/")
+        .replace(/\u00D7/g, "x")
+        .replace(/\u27F9|\u21D2/g, "=>")
+        .replace(/\u00B7/g, "");
+    }
+    // mesmo critério que o PDF original usa pra escolher a fonte de cada linha
+    function fontFor(l){
+      if (/^-->/.test(l)) return "courier";     // prompt, ex: "-->A"
+      if (/^ {4}/.test(l)) return "courier";    // linha de matriz (indentada)
+      return "helvetica";                        // comentário / fórmula / texto livre
+    }
+
+    var linhas = String(text).replace(/\r\n/g, "\n").split("\n").map(asciiClean);
+    var fonts = linhas.map(fontFor);
+
+    // tamanho igual ao do PDF original (12pt); só encolhe se alguma linha
+    // (ex: uma matriz grande, ou uma linha que o usuário digitou) não couber
+    var baseSize = 12;
+    var maxRatio = 1;
+    linhas.forEach(function(l, i){
+      if (!l.length) return;
+      doc.setFont(fonts[i], "normal"); doc.setFontSize(baseSize);
+      var w = doc.getTextWidth(l);
+      var ratio = w / avail;
+      if (ratio > maxRatio) maxRatio = ratio;
+    });
+    var fontSize = maxRatio > 1 ? Math.max(6, baseSize / maxRatio) : baseSize;
+    var lineH = fontSize * 1.2; // 12 * 1.2 = 14.4pt, igual ao espaçamento do PDF original
+
+    var y = margin;
+    linhas.forEach(function(l, i){
+      if (y + lineH > pageH - margin){ doc.addPage(); y = margin; }
+      if (l.length){
+        doc.setFont(fonts[i], "normal"); doc.setFontSize(fontSize); doc.setTextColor.apply(doc, INK);
+        doc.text(l, margin, y);
+      }
+      y += lineH;
+    });
+
+    var pageCount = doc.internal.getNumberOfPages();
+    for (var pg=1; pg<=pageCount; pg++){
+      doc.setPage(pg);
+      doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor.apply(doc, SOFT);
+      doc.text(String(pg)+" / "+pageCount, pageW-margin, pageH-20, {align:"right"});
+    }
+    return doc;
+  }
+
+  // ---------- modal "Visualizar" (editor completo antes de baixar) ----------
+  var previewModalEl = document.getElementById("previewModal");
+  var previewTextAreaEl = document.getElementById("previewTextArea");
+  var previewModalTitleEl = document.getElementById("previewModalTitle");
+  var previewOriginalText = "";
+  var previewFilenameBase = "questao-scilab-editado";
+
+  function openPreviewModal(items, filenameBase, titulo){
+    var texto = buildScilabText(items);
+    if (!texto) return;
+    previewOriginalText = texto;
+    previewFilenameBase = filenameBase;
+    previewTextAreaEl.value = texto;
+    previewModalTitleEl.textContent = titulo || "Visualizar";
+    previewModalEl.classList.add("open");
+  }
+  function closePreviewModal(){ previewModalEl.classList.remove("open"); }
+
+  document.getElementById("previewModalClose").addEventListener("click", closePreviewModal);
+  previewModalEl.addEventListener("click", function(e){ if (e.target === previewModalEl) closePreviewModal(); });
+
+  document.getElementById("btnPreviewReset").addEventListener("click", function(){
+    previewTextAreaEl.value = previewOriginalText;
+  });
+
+  document.getElementById("btnPreviewCopy").addEventListener("click", async function(){
+    var btn = this;
+    try{
+      await navigator.clipboard.writeText(previewTextAreaEl.value);
+    }catch(e){
+      previewTextAreaEl.select();
+      try{ document.execCommand("copy"); }catch(e2){ /* ignore */ }
+    }
+    var original = btn.textContent;
+    btn.textContent = "Copiado!";
+    setTimeout(function(){ btn.textContent = original; }, 1500);
+  });
+
+  document.getElementById("btnPreviewDownload").addEventListener("click", async function(){
+    var doc = buildPdfFromText(previewTextAreaEl.value);
+    if (!doc) return;
+    await saveBlobFile(doc.output("blob"), previewFilenameBase + ".pdf");
+  });
+
+  document.getElementById("btnPreviewOne").addEventListener("click", function(){
+    if (!lastComputation) return;
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : "jacobi"));
+    openPreviewModal([{st: state, comp: lastComputation}], nomeMetodo + "-scilab-editado", "Visualizar — questão atual");
+  });
+
   async function downloadScilabPdf(){
     var doc = buildScilabPdf();
     if (!doc) return;
@@ -2151,6 +2464,11 @@
     if (!savedQuestions.length) return;
     var doc = buildScilabPdf(savedItems());
     if (doc) await saveBlobFile(doc.output("blob"), "questoes-scilab.pdf");
+  });
+
+  document.getElementById("btnPreviewAll").addEventListener("click", function(){
+    if (!savedQuestions.length) return;
+    openPreviewModal(savedItems(), "questoes-scilab-editado", "Visualizar — todas as questões");
   });
 
   loadSaved();
