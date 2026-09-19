@@ -510,6 +510,10 @@
                 <input type="checkbox" id="chkScilabChart">
                 <label for="chkScilabChart">Incluir gráfico de convergência no final do PDF (Versão Scilab)</label>
               </div>
+              <div class="checkbox-row" style="margin-top:8px;">
+                <input type="checkbox" id="chkConv">
+                <label for="chkConv">Verificar convergência (mostrar a prova)</label>
+              </div>
             </div>
           </div>
 
@@ -612,6 +616,8 @@
   "use strict";
 
   // ---------- state ----------
+  // limite de iterações do modo tolerância (site, PDFs e código .sce usam este mesmo valor)
+  var MAX_ITER = 3000;
   var state = {
     method: "gauss",
     rows: 4, cols: 3,     // gauss: rows x (cols+1) augmented
@@ -619,7 +625,8 @@
     A: [], b: [],
     inicio: 0, numIter: 10, stopMode: "iter", tolerance: 0.001,
     headerOn: false, headerName: "", headerQuestion: "",
-    scilabChartOn: false
+    scilabChartOn: false,
+    checkConv: false
   };
 
   function mk(rows, cols, fill){
@@ -747,7 +754,7 @@
     var historico = [x.slice()];
     var iterations = [];
     var convergedAt = null;
-    var maxK = stopMode === "tol" ? 1000 : numIter;
+    var maxK = stopMode === "tol" ? MAX_ITER : numIter;
     for (var k=0; k<maxK; k++){
       var X = new Array(n).fill(0);
       var detail = [];
@@ -803,7 +810,7 @@
     var historico = [x.slice()];
     var iterations = [];
     var convergedAt = null;
-    var maxK = stopMode === "tol" ? 1000 : numIter;
+    var maxK = stopMode === "tol" ? MAX_ITER : numIter;
     for (var k=0; k<maxK; k++){
       var xOld = x.slice(); // só pra medir o erro máximo no final da varredura
       var detail = [];
@@ -1050,6 +1057,543 @@
     body.appendChild(box);
   }
 
+  // ---------- convergência (Jacobi / Gauss-Seidel): análise + prova ----------
+  // 1) Critério das Linhas:  αᵢ = Σⱼ≠ᵢ |aᵢⱼ| ÷ |aᵢᵢ| ;  α = máx αᵢ < 1  ⇒ converge (Jacobi e Seidel)
+  // 2) Sassenfeld (só Seidel): β₁ = Σⱼ>₁ |a₁ⱼ| ÷ |a₁₁| ;
+  //    βᵢ = (Σⱼ<ᵢ |aᵢⱼ|·βⱼ + Σⱼ>ᵢ |aᵢⱼ|) ÷ |aᵢᵢ| ;  β = máx βᵢ < 1  ⇒ converge
+  // 3) Definitivo (necessário e suficiente): ρ(C) < 1, onde C é a matriz de iteração
+  //    Jacobi: C = −D⁻¹(L+U)      Seidel: C = −(D+L)⁻¹U
+  //    (ρ = maior |autovalor|; autovalores = raízes do polinômio característico de C)
+  function convIterMatrix(A, method){
+    var n = A.length, C = mk(n, n, 0), i, j, k;
+    if (method !== "seidel"){
+      for (i=0;i<n;i++) for (j=0;j<n;j++) if (i!==j) C[i][j] = -A[i][j]/A[i][i];
+      return C;
+    }
+    // resolve (D+L)·c = −U[:,j] por substituição direta, uma coluna por vez
+    for (j=0;j<n;j++){
+      var col = [];
+      for (i=0;i<n;i++){
+        var s = -(j > i ? A[i][j] : 0);
+        for (k=0;k<i;k++) s -= A[i][k]*col[k];
+        col.push(s / A[i][i]);
+      }
+      for (i=0;i<n;i++) C[i][j] = col[i];
+    }
+    return C;
+  }
+
+  // coeficientes do polinômio característico (Faddeev–LeVerrier): p(λ) = Σ c[k]·λ^k, c[n] = 1
+  function convCharPoly(M){
+    var n = M.length, c = new Array(n+1).fill(0), Mk = mk(n, n, 0), i, j, l, k;
+    c[n] = 1;
+    for (k=1;k<=n;k++){
+      var prod = mk(n, n, 0);
+      for (i=0;i<n;i++) for (j=0;j<n;j++){
+        var t = 0; for (l=0;l<n;l++) t += M[i][l]*Mk[l][j];
+        prod[i][j] = t;
+      }
+      for (i=0;i<n;i++) prod[i][i] += c[n-k+1];
+      Mk = prod;
+      var tr = 0; for (i=0;i<n;i++) for (l=0;l<n;l++) tr += M[i][l]*Mk[l][i];
+      c[n-k] = -tr / k;
+    }
+    return c;
+  }
+
+  // raízes complexas do polinômio (Durand–Kerner) -> [{re, im, abs}]
+  function convPolyRoots(c){
+    var n = c.length - 1, i, j, k;
+    if (n < 1) return [];
+    var maxc = 0; for (k=0;k<n;k++) maxc = Math.max(maxc, Math.abs(c[k]));
+    var R = 1 + maxc, re = [], im = [], pr = R, pim = 0;
+    for (k=0;k<n;k++){
+      re.push(pr); im.push(pim);
+      var nr = pr*0.4 - pim*0.9, ni = pr*0.9 + pim*0.4; pr = nr; pim = ni;
+    }
+    for (var it=0; it<5000; it++){
+      var moved = 0;
+      for (i=0;i<n;i++){
+        // p(z) por Horner (complexo)
+        var pRe = c[n], pIm = 0;
+        for (k=n-1;k>=0;k--){
+          var tr = pRe*re[i] - pIm*im[i] + c[k];
+          pIm = pRe*im[i] + pIm*re[i]; pRe = tr;
+        }
+        var dRe = 1, dIm = 0;
+        for (j=0;j<n;j++){
+          if (j === i) continue;
+          var xr = re[i]-re[j], xi = im[i]-im[j];
+          if (xr === 0 && xi === 0) xr = 1e-12;
+          var tdr = dRe*xr - dIm*xi; dIm = dRe*xi + dIm*xr; dRe = tdr;
+        }
+        var den = dRe*dRe + dIm*dIm;
+        var qr = (pRe*dRe + pIm*dIm) / den, qi = (pIm*dRe - pRe*dIm) / den;
+        re[i] -= qr; im[i] -= qi;
+        moved = Math.max(moved, Math.abs(qr) + Math.abs(qi));
+      }
+      if (moved < 1e-14) break;
+    }
+    var out = [];
+    for (i=0;i<n;i++){
+      var r0 = Math.abs(re[i]) < 1e-10 ? 0 : re[i], i0 = Math.abs(im[i]) < 1e-10 ? 0 : im[i];
+      out.push({re:r0, im:i0, abs:Math.sqrt(r0*r0 + i0*i0)});
+    }
+    return out;
+  }
+
+  function analyzeConvergence(A, method){
+    var n = A.length, i, j, res = {n:n, method:method};
+    for (i=0;i<n;i++){
+      if (Math.abs(A[i][i]) < 1e-12){ res.zeroDiag = i; return res; }
+    }
+    // 1) Linhas
+    res.linhas = []; res.alpha = 0;
+    for (i=0;i<n;i++){
+      var terms = [], sum = 0;
+      for (j=0;j<n;j++) if (j!==i){ terms.push(Math.abs(A[i][j])); sum += Math.abs(A[i][j]); }
+      var al = sum / Math.abs(A[i][i]);
+      res.linhas.push({i:i, terms:terms, sum:sum, aii:Math.abs(A[i][i]), alpha:al});
+      res.alpha = Math.max(res.alpha, al);
+    }
+    res.linhasOk = res.alpha < 1;
+    // 2) Sassenfeld (Seidel)
+    res.sassOk = false;
+    if (method === "seidel"){
+      res.sass = []; res.beta = 0;
+      var betas = [];
+      for (i=0;i<n;i++){
+        var low = [], up = [], num = 0;
+        for (j=0;j<i;j++){ low.push({a:Math.abs(A[i][j]), beta:betas[j]}); num += Math.abs(A[i][j])*betas[j]; }
+        for (j=i+1;j<n;j++){ up.push(Math.abs(A[i][j])); num += Math.abs(A[i][j]); }
+        var be = num / Math.abs(A[i][i]);
+        betas.push(be);
+        res.sass.push({i:i, low:low, up:up, aii:Math.abs(A[i][i]), beta:be});
+        res.beta = Math.max(res.beta, be);
+      }
+      res.sassOk = res.beta < 1;
+    }
+    // 3) raio espectral
+    res.C = convIterMatrix(A, method);
+    res.poly = convCharPoly(res.C);
+    res.eig = convPolyRoots(res.poly);
+    // ordem fixa (módulo desc., depois parte imaginária e real desc.) — o .sce usa a mesma
+    function r6(x){ return Math.round(x*1e6)/1e6; }
+    function ckey(e){ return [r6(e.abs), r6(Math.abs(e.im) < 5e-5 ? 0 : e.im), r6(e.re)]; }
+    res.eig.sort(function(a, b){
+      var ka = ckey(a), kb = ckey(b);
+      for (var q=0;q<3;q++) if (ka[q] !== kb[q]) return kb[q] - ka[q];
+      return 0;
+    });
+    res.rho = 0; res.eig.forEach(function(e){ res.rho = Math.max(res.rho, e.abs); });
+    res.rhoOk = res.rho < 1 - 1e-7;
+    res.converge = res.linhasOk || res.sassOk || res.rhoOk;
+    return res;
+  }
+
+  function convFmtC(re, im){
+    if (Math.abs(im) < 5e-5) return fmt(re);
+    return fmt(re) + (im < 0 ? " - " : " + ") + fmt(Math.abs(im)) + "i";
+  }
+  function convAbs(x){ return "|" + fmt(x).replace("-", "−") + "|"; }
+  function convSup(k){
+    var m = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹"};
+    return String(k).split("").map(function(d){ return m[d]; }).join("");
+  }
+  function convPolyStr(c){
+    var n = c.length - 1, out = "";
+    for (var k=n;k>=0;k--){
+      var v = c[k]; if (Math.abs(v) < 1e-10) continue;
+      var mag = Math.abs(v), coefStr = (Math.abs(mag-1) < 1e-10 && k>0) ? "" : fmt(mag);
+      var term = k === 0 ? fmt(mag) : coefStr + "λ" + (k>1 ? convSup(k) : "");
+      if (out === "") out = (v < 0 ? "−" : "") + term;
+      else out += (v < 0 ? " − " : " + ") + term;
+    }
+    return out === "" ? "0" : out;
+  }
+
+  // ---------- prova de convergência em TEXTO (PDFs, Visualizar e .sce) ----------
+  // Tudo ASCII/Latin-1 (sem λ, ρ, ≥...) pra sair certo em qualquer fonte dos PDFs.
+  // O .sce imprime exatamente estas mesmas linhas (calculadas no próprio Scilab).
+  var CONV_TXT = {
+    linhasSub: "1) Critério das Linhas (condição suficiente)",
+    linhasF: ["alfa_i = (soma dos |a_ij|, j <> i) / |a_ii|", "Se alfa = max alfa_i < 1, o método converge."],
+    linhasOk: "Critério das Linhas satisfeito: converge.",
+    linhasBad: "Critério das Linhas não satisfeito (sozinho não prova nada).",
+    sassSub: "2) Critério de Sassenfeld (condição suficiente)",
+    sassF: ["beta_1 = (soma dos |a_1j|, j > 1) / |a_11|",
+            "beta_i = (soma_j<i |a_ij|*beta_j + soma_j>i |a_ij|) / |a_ii|",
+            "Se beta = max beta_i < 1, o método converge."],
+    sassOk: "Critério de Sassenfeld satisfeito: converge.",
+    sassBad: "Critério de Sassenfeld não satisfeito (sozinho não prova nada).",
+    espSub: ") Raio espectral (condição necessária e suficiente)",
+    espF: function(method){
+      return ["Converge para QUALQUER chute inicial <=> rho(C) < 1, onde",
+              "C = " + (method === "seidel" ? "-(D+L)^-1 U" : "-D^-1 (L+U)") + "  (A = L + D + U) e rho = maior |autovalor|."];
+    },
+    espOk: "rho(C) < 1: converge para qualquer chute inicial.",
+    espBad: "rho(C) >= 1: não converge."
+  };
+
+  // quebra linhas longas (em " + " ou em espaços) pra caber na largura dos PDFs
+  function convWrapLine(s){
+    var MAX = 66;
+    if (s.length <= MAX) return [s];
+    var sep = s.indexOf(" + ") !== -1 ? " + " : " ";
+    var parts = s.split(sep), lines = [], cur = parts[0];
+    for (var i=1;i<parts.length;i++){
+      if ((cur + sep + parts[i]).length > MAX){
+        lines.push(sep === " + " ? cur + " +" : cur);
+        cur = (sep === " + " ? "    " : "") + parts[i];
+      } else cur += sep + parts[i];
+    }
+    lines.push(cur);
+    return lines;
+  }
+
+  function convPolyAscii(c){
+    var n = c.length - 1, out = "";
+    for (var k=n;k>=0;k--){
+      var v = c[k]; if (Math.abs(v) < 1e-10) continue;
+      var mag = Math.abs(v), term;
+      if (k === 0) term = fmt(mag);
+      else term = (Math.abs(mag-1) < 1e-10 ? "" : fmt(mag)) + "lambda" + (k>1 ? "^" + k : "");
+      if (out === "") out = (v < 0 ? "-" : "") + term;
+      else out += (v < 0 ? " - " : " + ") + term;
+    }
+    return out === "" ? "0" : out;
+  }
+
+  // itens: {k:"title"|"sub"|"text"|"ok"|"bad", t:"..."} ou {k:"matrix", m:C}
+  function convergenceProofItems(A, method){
+    var res = analyzeConvergence(A, method), items = [], seidel = method === "seidel";
+    var nome = seidel ? "Gauss-Seidel" : "Jacobi";
+    function T(k, t){ convWrapLine(t).forEach(function(l){ items.push({k:k, t:l}); }); }
+    T("title", "Verificação de convergência - Método de " + nome);
+    if (res.zeroDiag !== undefined){
+      var d = res.zeroDiag + 1;
+      T("text", "a" + d + d + " = 0: divisão por zero no cálculo de x" + d + ".");
+      T("bad", "Método não aplicável. Reordene as linhas/colunas para");
+      T("bad", "tirar o zero da diagonal principal e verifique de novo.");
+      return items;
+    }
+    // 1) Linhas
+    T("sub", CONV_TXT.linhasSub);
+    CONV_TXT.linhasF.forEach(function(l){ T("text", l); });
+    res.linhas.forEach(function(L){
+      T("text", "alfa" + (L.i+1) + " = (" + L.terms.map(convAbs).join(" + ") + ") / " + convAbs(L.aii) +
+                " = " + fmt(L.sum) + " / " + fmt(L.aii) + " = " + fmt(L.alpha));
+    });
+    T("text", "alfa = max alfa_i = " + fmt(res.alpha) + (res.linhasOk ? "  <  1" : "  >=  1"));
+    T(res.linhasOk ? "ok" : "bad", res.linhasOk ? CONV_TXT.linhasOk : CONV_TXT.linhasBad);
+    // 2) Sassenfeld
+    if (seidel){
+      T("sub", CONV_TXT.sassSub);
+      CONV_TXT.sassF.forEach(function(l){ T("text", l); });
+      res.sass.forEach(function(S){
+        var parts = [];
+        S.low.forEach(function(t){ parts.push(convAbs(t.a) + "*" + fmt(t.beta)); });
+        S.up.forEach(function(t){ parts.push(convAbs(t)); });
+        T("text", "beta" + (S.i+1) + " = (" + parts.join(" + ") + ") / " + convAbs(S.aii) + " = " + fmt(S.beta));
+      });
+      T("text", "beta = max beta_i = " + fmt(res.beta) + (res.sassOk ? "  <  1" : "  >=  1"));
+      T(res.sassOk ? "ok" : "bad", res.sassOk ? CONV_TXT.sassOk : CONV_TXT.sassBad);
+    }
+    // 3) raio espectral
+    T("sub", (seidel ? "3" : "2") + CONV_TXT.espSub);
+    CONV_TXT.espF(method).forEach(function(l){ T("text", l); });
+    T("text", "Matriz de iteração C:");
+    items.push({k:"matrix", m:res.C});
+    T("text", "p(lambda) = det(C - lambda I) = " + convPolyAscii(res.poly));
+    res.eig.forEach(function(e, k){
+      T("text", "lambda" + (k+1) + " = " + convFmtC(e.re, e.im) + "      |lambda" + (k+1) + "| = " + fmt(e.abs));
+    });
+    T("text", "rho(C) = max |lambda_i| = " + fmt(res.rho) + (res.rhoOk ? "  <  1" : "  >=  1"));
+    T(res.rhoOk ? "ok" : "bad", res.rhoOk ? CONV_TXT.espOk : CONV_TXT.espBad);
+    // conclusão
+    T("sub", "Conclusão");
+    if (res.converge){
+      T("ok", "O método de " + nome + " CONVERGE para este sistema,");
+      T("ok", res.linhasOk ? "pelo Critério das Linhas (alfa = " + fmt(res.alpha) + " < 1)."
+            : res.sassOk ? "pelo Critério de Sassenfeld (beta = " + fmt(res.beta) + " < 1)."
+            : "pelo raio espectral (rho(C) = " + fmt(res.rho) + " < 1).");
+      if (!res.linhasOk && !res.sassOk){
+        T("text", "Os critérios suficientes falharam, mas são só suficientes:");
+        T("text", "o raio espectral é a palavra final.");
+      }
+    } else {
+      T("bad", "O método de " + nome + " NÃO CONVERGE para este sistema:");
+      T("bad", "rho(C) = " + fmt(res.rho) + " >= 1.");
+      T("text", "Tente reordenar as linhas para deixar a diagonal");
+      T("text", "mais dominante.");
+    }
+    return items;
+  }
+
+  // linha de situação (só modo tolerância): convergiu ou bateu no limite
+  function convStatusLine(run){
+    if (run.stopMode !== "tol") return null;
+    return run.convergedAt !== null
+      ? "// Convergiu (erro máximo <= " + run.tolerance + ") em " + run.iterations.length + " iterações."
+      : "// Não convergiu: limite de " + MAX_ITER + " iterações atingido (tolerância " + run.tolerance + ").";
+  }
+
+  // mesma coisa, como código Scilab (.sce)
+  function sceStatusTol(tolMode){
+    if (!tolMode) return "";
+    var tolS = String(state.tolerance);
+    return "if erro($) <= tol & ~or(isnan(x) | isinf(x)) then\n" +
+      "    escreve(msprintf(\"// Convergiu (erro máximo <= " + tolS + ") em %d iterações.\", N));\n" +
+      "else\n" +
+      "    escreve(msprintf(\"// Não convergiu: limite de %d iterações atingido (tolerância " + tolS + ").\", maxIter));\n" +
+      "end\n";
+  }
+
+  // prova de convergência calculada NO Scilab (imprime as mesmas linhas de convergenceProofItems)
+  function sceConvergenciaCode(){
+    var seidel = state.method === "seidel";
+    var nome = seidel ? "Gauss-Seidel" : "Jacobi";
+    var an = analyzeConvergence(state.A, state.method);
+    function E(t){ return sceEscreve("// " + t); }
+    var code = "\nescreve(\"\");\n";
+    code += E("Verificação de convergência - Método de " + nome);
+    if (an.zeroDiag !== undefined){
+      var d = an.zeroDiag + 1;
+      code += E("a" + d + d + " = 0: divisão por zero no cálculo de x" + d + ".");
+      code += E("Método não aplicável. Reordene as linhas/colunas para");
+      code += E("tirar o zero da diagonal principal e verifique de novo.");
+      return code;
+    }
+    // 1) Linhas
+    code += E(CONV_TXT.linhasSub);
+    CONV_TXT.linhasF.forEach(function(l){ code += E(l); });
+    code += String.raw`alfa = zeros(n,1);
+for i = 1:n
+    s = 0; t = "";
+    for j = 1:n
+        if j <> i then
+            s = s + abs(A(i,j));
+            if t <> "" then t = t + " + "; end
+            t = t + "|" + fnum(abs(A(i,j))) + "|";
+        end
+    end
+    alfa(i) = s / abs(A(i,i));
+    escreve(msprintf("// alfa%d = (%s) / |%s| = %s / %s = %s", i, t, fnum(abs(A(i,i))), fnum(s), fnum(abs(A(i,i))), fnum(alfa(i))));
+end
+al = max(alfa);
+if al < 1 then
+    escreve("// alfa = max alfa_i = " + fnum(al) + "  <  1");
+` + "    " + sceEscreve("// " + CONV_TXT.linhasOk).trim() + "\nelse\n    escreve(\"// alfa = max alfa_i = \" + fnum(al) + \"  >=  1\");\n    " +
+      sceEscreve("// " + CONV_TXT.linhasBad).trim() + "\nend\n";
+    // 2) Sassenfeld
+    if (seidel){
+      code += E(CONV_TXT.sassSub);
+      CONV_TXT.sassF.forEach(function(l){ code += E(l); });
+      code += String.raw`bet = zeros(n,1);
+for i = 1:n
+    s = 0; t = "";
+    for j = 1:i-1
+        s = s + abs(A(i,j))*bet(j);
+        if t <> "" then t = t + " + "; end
+        t = t + "|" + fnum(abs(A(i,j))) + "|*" + fnum(bet(j));
+    end
+    for j = i+1:n
+        s = s + abs(A(i,j));
+        if t <> "" then t = t + " + "; end
+        t = t + "|" + fnum(abs(A(i,j))) + "|";
+    end
+    bet(i) = s / abs(A(i,i));
+    escreve(msprintf("// beta%d = (%s) / |%s| = %s", i, t, fnum(abs(A(i,i))), fnum(bet(i))));
+end
+be = max(bet);
+sassOk = (be < 1);
+if sassOk then
+    escreve("// beta = max beta_i = " + fnum(be) + "  <  1");
+` + "    " + sceEscreve("// " + CONV_TXT.sassOk).trim() + "\nelse\n    escreve(\"// beta = max beta_i = \" + fnum(be) + \"  >=  1\");\n    " +
+        sceEscreve("// " + CONV_TXT.sassBad).trim() + "\nend\n";
+    } else {
+      code += "sassOk = %f;\n";
+    }
+    // 3) raio espectral
+    code += E((seidel ? "3" : "2") + CONV_TXT.espSub);
+    CONV_TXT.espF(state.method).forEach(function(l){ code += E(l); });
+    code += E("Matriz de iteração C:");
+    code += seidel ? "C = -inv(tril(A)) * (A - tril(A));\n" : "C = -inv(diag(diag(A))) * (A - diag(diag(A)));\n";
+    code += "mostra(C, -1);\n";
+    code += String.raw`c = coeff(poly(C, "x"));
+t = "";
+for k = n:-1:0
+    v = c(k+1);
+    if abs(v) >= 1e-10 then
+        mag = abs(v);
+        if k == 0 then
+            term = fnum(mag);
+        else
+            if abs(mag - 1) < 1e-10 then term = ""; else term = fnum(mag); end
+            term = term + "lambda";
+            if k > 1 then term = term + "^" + string(k); end
+        end
+        if t == "" then
+            if v < 0 then t = "-" + term; else t = term; end
+        else
+            if v < 0 then t = t + " - " + term; else t = t + " + " + term; end
+        end
+    end
+end
+if t == "" then t = "0"; end
+escreve("// p(lambda) = det(C - lambda I) = " + t);
+l = spec(C);
+imr = imag(l); imr(abs(imr) < 5e-5) = 0;
+K = [round(abs(l)*1e6)/1e6, round(imr*1e6)/1e6, round(real(l)*1e6)/1e6];
+[ks, ix] = gsort(K, "lr", "d");
+l = l(ix);
+for k = 1:n
+    if abs(imag(l(k))) < 5e-5 then
+        escreve(msprintf("// lambda%d = %s      |lambda%d| = %s", k, fnum(real(l(k))), k, fnum(abs(l(k)))));
+    else
+        if imag(l(k)) < 0 then sg = " - "; else sg = " + "; end
+        escreve(msprintf("// lambda%d = %s%s%si      |lambda%d| = %s", k, fnum(real(l(k))), sg, fnum(abs(imag(l(k)))), k, fnum(abs(l(k)))));
+    end
+end
+rho = max(abs(l));
+rhoOk = (rho < 1 - 1e-7);
+if rhoOk then
+    escreve("// rho(C) = max |lambda_i| = " + fnum(rho) + "  <  1");
+` + "    " + sceEscreve("// " + CONV_TXT.espOk).trim() + "\nelse\n    escreve(\"// rho(C) = max |lambda_i| = \" + fnum(rho) + \"  >=  1\");\n    " +
+      sceEscreve("// " + CONV_TXT.espBad).trim() + "\nend\n";
+    // conclusão
+    code += E("Conclusão");
+    code += "if (al < 1) | sassOk | rhoOk then\n";
+    code += "    " + sceEscreve("// O método de " + nome + " CONVERGE para este sistema,").trim() + "\n";
+    code += "    if al < 1 then\n" +
+            "        escreve(\"// pelo Critério das Linhas (alfa = \" + fnum(al) + \" < 1).\");\n";
+    if (seidel){
+      code += "    elseif sassOk then\n" +
+              "        escreve(\"// pelo Critério de Sassenfeld (beta = \" + fnum(be) + \" < 1).\");\n";
+    }
+    code += "    else\n" +
+            "        escreve(\"// pelo raio espectral (rho(C) = \" + fnum(rho) + \" < 1).\");\n" +
+            "    end\n";
+    code += "    if ~(al < 1) & ~sassOk then\n" +
+            "        " + sceEscreve("// Os critérios suficientes falharam, mas são só suficientes:").trim() + "\n" +
+            "        " + sceEscreve("// o raio espectral é a palavra final.").trim() + "\n" +
+            "    end\n";
+    code += "else\n";
+    code += "    " + sceEscreve("// O método de " + nome + " NÃO CONVERGE para este sistema:").trim() + "\n";
+    code += "    escreve(\"// rho(C) = \" + fnum(rho) + \" >= 1.\");\n";
+    code += "    " + sceEscreve("// Tente reordenar as linhas para deixar a diagonal").trim() + "\n";
+    code += "    " + sceEscreve("// mais dominante.").trim() + "\n";
+    code += "end\n";
+    return code;
+  }
+
+  function buildConvergenceProof(A, method){
+    var res = analyzeConvergence(A, method);
+    var nome = method === "seidel" ? "Gauss-Seidel" : "Jacobi";
+    var OK = "var(--teal)", BAD = "var(--danger)";
+
+    var card = document.createElement("div"); card.className = "step"; card.style.marginBottom = "14px";
+    var top = document.createElement("div"); top.className = "step-top";
+    var pill = function(txt, bg){
+      return '<span style="margin-left:auto;display:inline-block;padding:2px 9px;border-radius:99px;font-size:11px;font-weight:700;background:'+bg+';color:#fff;font-family:sans-serif;">'+txt+'</span>';
+    };
+    var verdictPill = res.zeroDiag !== undefined ? pill("não aplicável", BAD)
+      : (res.converge ? pill("✓ converge", "#10b981") : pill("✗ não converge", BAD));
+    top.innerHTML = '<span class="step-chip chip-elim">convergência — ' + nome + '</span>' + verdictPill;
+    var body = document.createElement("div"); body.className = "step-body";
+
+    function title(t){
+      var d = document.createElement("div");
+      d.style.cssText = "font-weight:700;font-size:13px;margin:14px 0 6px;color:var(--ink);";
+      d.textContent = t; body.appendChild(d);
+    }
+    function note(t){
+      var d = document.createElement("div"); d.className = "hint"; d.style.margin = "0 0 6px"; d.textContent = t; body.appendChild(d);
+    }
+    function mono(t, color){
+      var d = document.createElement("div"); d.className = "mono";
+      d.style.cssText = "font-size:12.5px;margin-bottom:4px;color:" + (color || "var(--ink)") + ";";
+      d.textContent = t; body.appendChild(d);
+    }
+    function verdict(ok, t){
+      var d = document.createElement("div");
+      d.style.cssText = "margin-top:8px;padding:8px 10px;border-radius:var(--radius);font-size:12.5px;font-weight:600;border:1px solid " + (ok ? OK : BAD) + ";color:" + (ok ? OK : BAD) + ";";
+      d.textContent = t; body.appendChild(d);
+    }
+    // primeiro elemento do corpo já vem com margem menor
+    var firstTitle = true;
+    var titleOrig = title;
+    title = function(t){ titleOrig(t); if (firstTitle){ body.lastChild.style.marginTop = "0"; firstTitle = false; } };
+
+    if (res.zeroDiag !== undefined){
+      title("Não dá pra aplicar o método");
+      mono("a" + (res.zeroDiag+1) + (res.zeroDiag+1) + " = 0  →  divisão por zero em x" + (res.zeroDiag+1) + " = (b" + (res.zeroDiag+1) + " − …) ÷ a" + (res.zeroDiag+1) + (res.zeroDiag+1), BAD);
+      note("Com zero na diagonal principal o método nem consegue calcular a iteração. Reordene as linhas/colunas do sistema para que a diagonal não tenha zeros e verifique de novo.");
+      card.appendChild(top); card.appendChild(body);
+      return card;
+    }
+
+    // ── 1) Linhas ──
+    title("1) Critério das Linhas — condição suficiente");
+    note("αᵢ = (soma dos |aᵢⱼ| fora da diagonal) ÷ |aᵢᵢ|.  Se α = máx αᵢ < 1, o método converge (vale para Jacobi e Gauss-Seidel).");
+    res.linhas.forEach(function(L){
+      mono("α" + (L.i+1) + " = (" + L.terms.map(convAbs).join(" + ") + ") ÷ " + convAbs(L.aii) + " = " + fmt(L.sum) + " ÷ " + fmt(L.aii) + " = " + fmt(L.alpha),
+           L.alpha < 1 ? null : BAD);
+    });
+    mono("α = máx αᵢ = " + fmt(res.alpha) + (res.linhasOk ? "  <  1" : "  ≥  1"));
+    verdict(res.linhasOk, res.linhasOk ? "✓ Critério das Linhas satisfeito → converge." : "✗ Critério das Linhas não satisfeito (não prova nada sozinho — segue a análise).");
+
+    // ── 2) Sassenfeld ──
+    if (method === "seidel"){
+      title("2) Critério de Sassenfeld — condição suficiente (Gauss-Seidel)");
+      note("β₁ = (soma dos |a₁ⱼ|, j > 1) ÷ |a₁₁|  e  βᵢ = (Σⱼ<ᵢ |aᵢⱼ|·βⱼ + Σⱼ>ᵢ |aᵢⱼ|) ÷ |aᵢᵢ|.  Se β = máx βᵢ < 1, converge.");
+      res.sass.forEach(function(S){
+        var parts = [];
+        S.low.forEach(function(t){ parts.push(convAbs(t.a) + "·" + fmt(t.beta)); });
+        S.up.forEach(function(t){ parts.push(convAbs(t)); });
+        mono("β" + (S.i+1) + " = (" + parts.join(" + ") + ") ÷ " + convAbs(S.aii) + " = " + fmt(S.beta), S.beta < 1 ? null : BAD);
+      });
+      mono("β = máx βᵢ = " + fmt(res.beta) + (res.sassOk ? "  <  1" : "  ≥  1"));
+      verdict(res.sassOk, res.sassOk ? "✓ Critério de Sassenfeld satisfeito → converge." : "✗ Critério de Sassenfeld não satisfeito (não prova nada sozinho — segue a análise).");
+    }
+
+    // ── 3) Raio espectral ──
+    title((method === "seidel" ? "3" : "2") + ") Raio espectral — condição necessária e suficiente");
+    note("O método converge para QUALQUER chute inicial ⇔ ρ(C) < 1, onde ρ é o maior |autovalor| da matriz de iteração C = " +
+         (method === "seidel" ? "−(D+L)⁻¹U" : "−D⁻¹(L+U)") + "  (A = L + D + U).");
+    mono("Matriz de iteração C:");
+    var tbl = document.createElement("table"); tbl.className = "mtx"; tbl.style.margin = "4px 0 10px";
+    res.C.forEach(function(row){
+      var tr = document.createElement("tr");
+      row.forEach(function(v){ var td = document.createElement("td"); td.textContent = fmt(v); tr.appendChild(td); });
+      tbl.appendChild(tr);
+    });
+    body.appendChild(tbl);
+    mono("Polinômio característico:  p(λ) = det(C − λI) = " + convPolyStr(res.poly));
+    res.eig.forEach(function(e, k){
+      mono("λ" + (k+1) + " = " + convFmtC(e.re, e.im) + "      |λ" + (k+1) + "| = " + fmt(e.abs));
+    });
+    mono("ρ(C) = máx |λᵢ| = " + fmt(res.rho) + (res.rhoOk ? "  <  1" : "  ≥  1"), res.rhoOk ? null : BAD);
+    verdict(res.rhoOk, res.rhoOk ? "✓ ρ(C) < 1 → converge para qualquer chute inicial." : "✗ ρ(C) ≥ 1 → não converge (para chutes iniciais gerais as iterações não se aproximam da solução).");
+
+    // ── conclusão ──
+    title("Conclusão");
+    var concl;
+    if (res.converge){
+      var how = res.linhasOk ? "pelo Critério das Linhas (α = " + fmt(res.alpha) + " < 1)"
+              : res.sassOk ? "pelo Critério de Sassenfeld (β = " + fmt(res.beta) + " < 1)"
+              : "pelo raio espectral (ρ(C) = " + fmt(res.rho) + " < 1)";
+      concl = "O método de " + nome + " CONVERGE para este sistema, " + how + ".";
+      if (!res.linhasOk && !(method === "seidel" && res.sassOk)) concl += " Os critérios suficientes falharam, mas eles são só suficientes — o raio espectral é a palavra final.";
+    } else {
+      concl = "O método de " + nome + " NÃO CONVERGE para este sistema: ρ(C) = " + fmt(res.rho) + " ≥ 1. Tente reordenar as linhas do sistema para deixar a diagonal mais dominante.";
+    }
+    verdict(res.converge, concl);
+
+    card.appendChild(top); card.appendChild(body);
+    return card;
+  }
+
   function renderJacobiSteps(run){
     var body = document.getElementById("stepsBody");
     body.innerHTML = "";
@@ -1155,7 +1699,7 @@
     var iterLabel = run.stopMode === "tol"
       ? (run.convergedAt !== null
           ? "Convergiu na iteração " + (run.convergedAt + 1) + " (erro ≤ " + run.tolerance + ")"
-          : "Não convergiu em 1000 iterações (tolerância " + run.tolerance + ")")
+          : "Não convergiu em " + MAX_ITER + " iterações (tolerância " + run.tolerance + ")")
       : "Resultado após " + run.iterations.length + " iterações";
     var h = document.createElement("h3"); h.textContent = iterLabel;
     box.appendChild(h);
@@ -1274,6 +1818,10 @@
       var run = runFn(state.A, state.b, state.inicio, state.numIter, state.stopMode, state.tolerance);
       lastComputation = {method: state.method, run:run, diagWarn:diag0};
       renderJacobiSteps(run);
+      if (state.checkConv){
+        var stepsBodyEl = document.getElementById("stepsBody");
+        stepsBodyEl.insertBefore(buildConvergenceProof(state.A, state.method), stepsBodyEl.firstChild);
+      }
       if (diag0){
         var warn = document.createElement("div");
         warn.className = "hint"; warn.style.color = "var(--danger)"; warn.style.marginTop = "10px";
@@ -1409,6 +1957,13 @@
   chkScilabChartEl.addEventListener("change", function(){
     state.scilabChartOn = chkScilabChartEl.checked;
     saveLocal();
+  });
+
+  // ---------- verificação de convergência (Jacobi / Gauss-Seidel) ----------
+  var chkConvEl = document.getElementById("chkConv");
+  chkConvEl.addEventListener("change", function(){
+    state.checkConv = chkConvEl.checked;
+    render(); saveLocal();
   });
 
   // ---------- PDF ----------
@@ -1983,6 +2538,8 @@
         line("// Resultado após "+run.iterations.length+" iteracoes:");
         mono(10, INK);
         for (var vi=0; vi<run.n; vi++) line("//   x"+(vi+1)+" = "+jf2(lastX[vi]));
+        var stLine = convStatusLine(run);
+        if (stLine) line(stLine);
         if (comp.diagWarn){
           blank(6);
           mono(9, INK);
@@ -2028,6 +2585,17 @@
           }
           rowT(fmtRowT(headT));
           rowsT.forEach(function(r){ rowT(fmtRowT(r)); });
+        }
+
+        // verificação de convergência (só se estava marcada) — no fim da questão
+        if (st.checkConv){
+          blank(9);
+          convergenceProofItems(st.A, comp.method).forEach(function(ci){
+            if (ci.k === "matrix"){ drawScMatrix(ci.m); return; }
+            if (ci.k === "sub") blank(6);
+            mono(12, INK);
+            line("// " + ci.t);
+          });
         }
       }
     }
@@ -2160,6 +2728,8 @@
         var lastX = run.historico[run.historico.length-1];
         push("// Resultado após "+run.iterations.length+" iteracoes:");
         for (var vi=0; vi<run.n; vi++) push("//   x"+(vi+1)+" = "+jf2(lastX[vi]));
+        var stLineT = convStatusLine(run);
+        if (stLineT) push(stLineT);
         if (comp.diagWarn){
           blankLine();
           push("// Atenção: elemento zero na diagonal principal de A — convergência não garantida.");
@@ -2192,6 +2762,16 @@
           }
           push("    "+fmtRowT(headT));
           rowsT.forEach(function(r){ push("    "+fmtRowT(r)); });
+        }
+
+        // verificação de convergência (só se estava marcada) — no fim da questão
+        if (st.checkConv){
+          blankLine();
+          convergenceProofItems(st.A, comp.method).forEach(function(ci){
+            if (ci.k === "matrix"){ matrixLines(ci.m); blankLine(); return; }
+            if (ci.k === "sub") blankLine();
+            push("// " + ci.t);
+          });
         }
       }
     }
@@ -2670,7 +3250,7 @@ end
     // mesma escolha de casas decimais que a interface e o PDF usam
     var F = tolMode ? function(e){ return "ftol(" + e + ", casas)"; }
                     : function(e){ return "fnum(" + e + ")"; };
-    var code = SCE_HEADER + SCE_HELP_BASE + (tolMode ? SCE_HELP_TOL : "");
+    var code = SCE_HEADER + SCE_HELP_BASE + (state.checkConv ? SCE_HELP_MATRIZ : "") + (tolMode ? SCE_HELP_TOL : "");
     code += "A = " + matrixToScilab(state.A) + ";\n";
     code += "b = " + vectorToScilabCol(state.b) + ";\n";
     code += "n = size(A,1);\n";
@@ -2678,7 +3258,7 @@ end
     if (tolMode){
       code += "tol = " + fmtScilab(state.tolerance) + "; // tolerância: para quando o erro máximo <= tol\n";
       code += "casas = " + tolCasas(state.tolerance) + "; // casas decimais mostradas\n";
-      code += "maxIter = 1000;\n\n";
+      code += "maxIter = " + MAX_ITER + "; // limite de iterações\n\n";
     } else {
       code += "maxIter = " + state.numIter + "; // número de iterações\n\n";
     }
@@ -2704,7 +3284,7 @@ for k = 1:maxIter
     hist = [hist, x];
     erro = [erro, e];
 `;
-    if (tolMode) code += "    if e <= tol then break; end\n";
+    if (tolMode) code += "    if e <= tol & ~or(isnan(x) | isinf(x)) then break; end\n";
     code += "end\n";
     code += "N = size(hist,2) - 1; // iterações realizadas\n\n";
     code += "escreve(msprintf(\"inicio = " + fmtScilab(state.inicio) + ";   num_interacoes = %d;\", N));\n";
@@ -2722,6 +3302,7 @@ for k = 1:maxIter
     code += "for i = 1:n\n";
     code += "    escreve(msprintf(\"//   x%d = %s\", i, " + F("hist(i,N+1)") + "));\n";
     code += "end\n";
+    code += sceStatusTol(tolMode);
 
     if (lastComputation && lastComputation.diagWarn){
       code += "escreve(\"\");\n";
@@ -2760,6 +3341,7 @@ for r = 1:N+2
 end
 `;
     }
+    if (state.checkConv) code += sceConvergenciaCode();
     return code;
   }
 
@@ -2768,7 +3350,7 @@ end
     // mesma escolha de casas decimais que a interface e o PDF usam
     var F = tolMode ? function(e){ return "ftol(" + e + ", casas)"; }
                     : function(e){ return "fnum(" + e + ")"; };
-    var code = SCE_HEADER + SCE_HELP_BASE + (tolMode ? SCE_HELP_TOL : "");
+    var code = SCE_HEADER + SCE_HELP_BASE + (state.checkConv ? SCE_HELP_MATRIZ : "") + (tolMode ? SCE_HELP_TOL : "");
     code += "A = " + matrixToScilab(state.A) + ";\n";
     code += "b = " + vectorToScilabCol(state.b) + ";\n";
     code += "n = size(A,1);\n";
@@ -2776,7 +3358,7 @@ end
     if (tolMode){
       code += "tol = " + fmtScilab(state.tolerance) + "; // tolerância: para quando o erro máximo <= tol\n";
       code += "casas = " + tolCasas(state.tolerance) + "; // casas decimais mostradas\n";
-      code += "maxIter = 1000;\n\n";
+      code += "maxIter = " + MAX_ITER + "; // limite de iterações\n\n";
     } else {
       code += "maxIter = " + state.numIter + "; // número de iterações\n\n";
     }
@@ -2801,7 +3383,7 @@ for k = 1:maxIter
     hist = [hist, x];
     erro = [erro, e];
 `;
-    if (tolMode) code += "    if e <= tol then break; end\n";
+    if (tolMode) code += "    if e <= tol & ~or(isnan(x) | isinf(x)) then break; end\n";
     code += "end\n";
     code += "N = size(hist,2) - 1; // iterações realizadas\n\n";
     code += "escreve(msprintf(\"inicio = " + fmtScilab(state.inicio) + ";   num_interacoes = %d;\", N));\n";
@@ -2819,6 +3401,7 @@ for k = 1:maxIter
     code += "for i = 1:n\n";
     code += "    escreve(msprintf(\"//   x%d = %s\", i, " + F("hist(i,N+1)") + "));\n";
     code += "end\n";
+    code += sceStatusTol(tolMode);
 
     if (lastComputation && lastComputation.diagWarn){
       code += "escreve(\"\");\n";
@@ -2857,6 +3440,7 @@ for r = 1:N+2
 end
 `;
     }
+    if (state.checkConv) code += sceConvergenciaCode();
     return code;
   }
 
@@ -3218,6 +3802,7 @@ end
     headerNameEl.value = state.headerName || "";
     headerQuestionEl.value = state.headerQuestion || "";
     chkScilabChartEl.checked = !!state.scilabChartOn;
+    chkConvEl.checked = !!state.checkConv;
     buildEditor();
     render();
   }
