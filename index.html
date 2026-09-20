@@ -3169,7 +3169,8 @@ if rhoOk then
 
   var SCE_HEADER = "// Gerado pelo Resolvedor de Cálculo Numérico\n" +
     "// Cole no SciNotes e rode (F5, ou selecione tudo e mande executar).\n" +
-    "// Usa só funções nativas do Scilab — nenhuma toolbox/lib extra é necessária.\n\n";
+    "// Usa só funções nativas do Scilab — nenhuma toolbox/lib extra é necessária.\n\n" +
+    "clc();  // limpa o console: tira o cabeçalho de inicialização e o eco do exec()\n\n";
 
   // texto que vai entre aspas no script: mesma limpeza de caracteres do PDF
   // (traço longo -> "-", seta -> "->"...) e aspas duplicadas, como o Scilab exige
