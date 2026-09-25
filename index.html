@@ -387,6 +387,16 @@
     cursor:pointer; padding:3px 8px; border-radius: var(--radius);
   }
   .saved-x:hover{ color:var(--danger); background:var(--danger-tint); }
+  .saved-move{ display:flex; flex-direction:column; gap:2px; flex:0 0 auto; }
+  .saved-move-btn{
+    border:1px solid var(--line); background:var(--paper-raised); color:var(--ink-soft);
+    font-size:10px; line-height:1; cursor:pointer; padding:2px 5px; border-radius: var(--radius);
+  }
+  .saved-move-btn:hover:not(:disabled){ color:var(--ink); background:var(--brass-tint); border-color:var(--brass); }
+  .saved-move-btn:disabled{ opacity:.35; cursor:default; }
+  .saved-item.dragging{ opacity:.5; }
+  .saved-item{ cursor:grab; }
+  .saved-item.dragging{ cursor:grabbing; }
   .saved-lead{ font-size:12px; color:var(--ink-soft); margin:12px 0 6px; }
 
   ::selection{ background: var(--brass-tint); }
@@ -396,6 +406,72 @@
     .shell{ padding: 24px 14px 70px; }
     input.cell, input.bcell{ width: 50px; height: 36px; font-size: 12.5px; }
   }
+
+  /* ---------- Bisseção: painel próprio ---------- */
+  /* A Bisseção não usa a grade de matriz ao lado, então o painel de
+     configuração ganha a largura toda (em vez de ficar espremido na
+     coluna estreita de 152px) e os campos ficam lado a lado. */
+  #dimsPanel.dims-full{
+    width:100%; flex:1 1 100%; border-right:none; padding-right:0;
+    border-bottom:1px solid var(--line-soft); padding-bottom:14px;
+  }
+  .bisection-config{
+    width:100%; display:flex; flex-direction:row; flex-wrap:wrap;
+    align-items:flex-start; gap:16px 22px;
+  }
+  .bisection-config .field-row{ margin-bottom:0; }
+  .function-field{ display:flex; flex-direction:column; gap:5px; flex:1 1 260px; min-width:220px; }
+  .function-field label{ font-size:11.5px; color:var(--ink-soft); }
+  .function-input{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:var(--radius);
+    background:var(--paper); color:var(--ink); font-family:"JetBrains Mono"; font-size:13px;
+  }
+  .function-input:focus{ outline:none; border-color:var(--brass); box-shadow:0 0 0 2px var(--brass-tint); }
+  .interval-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; flex:0 0 160px; width:160px; }
+  .interval-cell label{ display:block; font-size:11.5px; color:var(--ink-soft); margin-bottom:5px; }
+  .interval-cell input{ width:100%; }
+  .bis-stopmode-field{ flex:0 0 190px; }
+  .bis-iter-field{ flex:0 0 150px; }
+  .bisection-actions{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; flex:1 1 260px; min-width:220px; align-self:flex-end; }
+  .bisection-config .checkbox-row{ flex:1 1 100%; }
+  .btn.bis-table{ background:var(--teal-tint); color:var(--teal); border-color:var(--teal); }
+  .btn.bis-graph{ background:var(--sky-tint); color:var(--sky); border-color:var(--sky); }
+  @media (max-width: 760px){
+    .bisection-config{ flex-direction:column; }
+    .function-field, .interval-grid, .bis-stopmode-field, .bis-iter-field, .bisection-actions{
+      flex:1 1 100%; width:auto;
+    }
+  }
+  .bis-summary{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
+  .bis-stat{
+    flex:1 1 125px; min-width:115px; padding:8px 10px; border:1px solid var(--line);
+    background:var(--paper); border-radius:var(--radius);
+  }
+  .bis-stat small{ display:block; color:var(--ink-faint); font-size:10.5px; margin-bottom:3px; }
+  .bis-stat strong{ font-family:"JetBrains Mono"; font-size:13px; }
+  .bis-table-wrap{ overflow:auto; border:1px solid var(--line); border-radius:var(--radius); }
+  table.bis-table-grid{ border-collapse:collapse; width:100%; min-width:760px; font-family:"JetBrains Mono"; font-size:13.5px; }
+  table.bis-table-grid th, table.bis-table-grid td{ padding:9px 13px; border-bottom:1px solid var(--line-soft); text-align:right; white-space:nowrap; }
+  table.bis-table-grid th{ background:var(--paper); color:var(--ink-soft); font-weight:600; font-size:12px; }
+  table.bis-table-grid th:first-child, table.bis-table-grid td:first-child{ text-align:left; }
+  table.bis-table-grid tr:last-child td{ border-bottom:none; }
+  .bis-sign-pos{ color:var(--teal); font-weight:700; }
+  .bis-sign-neg{ color:var(--danger); font-weight:700; }
+  .bis-graph-modal .modal-box{ max-width:1000px; }
+  .bis-graph-wrap{
+    position:relative; height:min(68vh,620px); min-height:380px; overflow:hidden;
+    border:1px solid var(--line); border-radius:var(--radius); background:var(--paper);
+  }
+  #bisGraphSvg{ width:100%; height:100%; display:block; }
+  .bis-legend{ display:flex; gap:16px; flex-wrap:wrap; padding-top:9px; font-size:11.5px; color:var(--ink-soft); }
+  .bis-legend span{ display:flex; align-items:center; gap:6px; }
+  .bis-dot{ width:9px; height:9px; border-radius:50%; display:inline-block; }
+  .bis-line{ width:18px; height:2px; display:inline-block; }
+  @media(max-width:560px){
+    .bisection-actions{ grid-template-columns:1fr; }
+    .bis-graph-wrap{ min-height:300px; }
+  }
+
 </style>
 </head>
 <body>
@@ -435,6 +511,10 @@
     <label class="method-opt" data-method="lu">
       <input type="radio" name="method" value="lu">
       <span class="mo-text"><b>Fatoração LU</b></span>
+    </label>
+    <label class="method-opt" data-method="bissecao">
+      <input type="radio" name="method" value="bissecao">
+      <span class="mo-text"><b>Bisseção</b></span>
     </label>
   </div>
 
@@ -483,6 +563,55 @@
               </div>
             </div>
             <div class="hint" id="dimsHint">A última coluna é o vetor b. Máximo: 6×6.</div>
+
+            <div id="bisectionParams" class="bisection-config" style="display:none;">
+              <div class="function-field">
+                <label for="bisFunction">Função f(x)</label>
+                <input class="function-input" id="bisFunction" type="text" spellcheck="false"
+                  placeholder="ex.: x^3 - 2*x - 5">
+                <div class="hint">Aceita x, +, −, *, /, ^, parênteses e funções como ln(x), sin(x), cos(x), sqrt(x) e e^x.</div>
+              </div>
+
+              <div class="interval-grid">
+                <div class="interval-cell">
+                  <label for="bisA">A</label>
+                  <input type="number" class="param" id="bisA" step="any" value="2">
+                </div>
+                <div class="interval-cell">
+                  <label for="bisB">B</label>
+                  <input type="number" class="param" id="bisB" step="any" value="3">
+                </div>
+              </div>
+
+              <div class="field-row bis-stopmode-field" style="flex-direction:column;align-items:stretch;gap:6px;">
+                <label>Critério de parada</label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;">
+                  <input type="radio" name="bisStopMode" value="iter" id="bisStopIter" checked> Número de iterações
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer;">
+                  <input type="radio" name="bisStopMode" value="tol" id="bisStopTol"> Tolerância
+                </label>
+              </div>
+
+              <div class="field-row bis-iter-field" id="bisFieldNumIter">
+                <label>Iterações</label>
+                <input type="number" class="param" id="bisNumIter" value="5" min="1" max="3000" step="1" style="width:100%;">
+                <div class="hint" style="margin-top:2px;">Gera as iterações de 0 até o número informado.</div>
+              </div>
+              <div class="field-row bis-iter-field" id="bisFieldTolerance" style="display:none;">
+                <label>Tolerância ε</label>
+                <input type="number" class="param" id="bisTolerance" value="0.001" min="1e-15" step="any" style="width:100%;">
+              </div>
+
+              <div class="bisection-actions">
+                <button class="btn bis-table" id="btnBisTable" type="button">Tabela de iterações</button>
+                <button class="btn bis-graph" id="btnBisGraph" type="button">Gráfico da função</button>
+              </div>
+              <div class="checkbox-row" style="margin-top:8px;">
+                <input type="checkbox" id="chkBisChart">
+                <label for="chkBisChart" title="Inclui o gráfico da função e os pontos da bisseção no PDF e no código Scilab (.sce)">Inserir gráfico (PDF e .sce)</label>
+              </div>
+            </div>
 
             <div id="jacobiParams" style="display:none;">
               <div class="field-row">
@@ -583,6 +712,26 @@
   <footer class="foot">Cálculo feito no navegador · o mesmo passo a passo é usado para gerar o PDF</footer>
 </div>
 
+<div class="modal-overlay bis-graph-modal" id="bisGraphModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Gráfico — Método da Bisseção</h3>
+      <button class="modal-close" id="bisGraphClose" type="button" aria-label="fechar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="bis-graph-wrap">
+        <svg id="bisGraphSvg" viewBox="0 0 900 560" preserveAspectRatio="none" aria-label="Gráfico da função e das iterações da bisseção"></svg>
+      </div>
+      <div class="bis-legend">
+        <span><i class="bis-line" style="background:var(--ink-soft)"></i> f(x)</span>
+        <span><i class="bis-dot" style="background:var(--danger)"></i> extremos do intervalo</span>
+        <span><i class="bis-dot" style="background:var(--teal)"></i> pontos médios</span>
+        <span><i class="bis-dot" style="background:var(--brass)"></i> raiz aproximada</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="scilabModal">
   <div class="modal-box">
     <div class="modal-head">
@@ -590,7 +739,7 @@
       <button class="modal-close" id="scilabModalClose" type="button" aria-label="fechar">×</button>
     </div>
     <div class="modal-body">
-      <div class="hint" id="scilabCodeHint">Script gerado a partir da matriz atual — só usa funções nativas do Scilab, sem nenhuma toolbox extra. Cole no SciNotes e rode com F5 (ou selecione tudo e mande executar).</div>
+      <div class="hint" id="scilabCodeHint">Script gerado a partir dos dados atuais — só usa funções nativas do Scilab, sem nenhuma toolbox extra. Cole no SciNotes e rode com F5 (ou selecione tudo e mande executar).</div>
       <textarea id="scilabCodeArea" readonly spellcheck="false"></textarea>
     </div>
     <div class="modal-actions">
@@ -634,6 +783,8 @@
     jn: 3,                // jacobi: n x n
     A: [], b: [],
     inicio: 0, numIter: 10, stopMode: "iter", tolerance: 0.001,
+    bisFunction: "x^3 - 2*x - 5", bisA: 2, bisB: 3, bisNumIter: 5,
+    bisStopMode: "iter", bisTolerance: 0.001, bisChartOn: false,
     headerOn: false, headerName: "", headerQuestion: "",
     scilabChartOn: false,
     checkConv: false,
@@ -921,13 +1072,315 @@
     return s;
   }
 
+  // ---------- Método da Bisseção ----------
+  // Segue a Lista 3: x_k=(a_k+b_k)/2, erro relativo
+  // E_k=|x_k-x_(k-1)|/|x_k| e seleção pelo sinal de f(a_k)·f(x_k).
+  function makeFunction(expr){
+    var src = String(expr || "").trim()
+      .replace(/−/g, "-")
+      .replace(/[×·]/g, "*")
+      .replace(/÷/g, "/")
+      .replace(/π/gi, "Math.PI")
+      .replace(/\bpi\b/gi, "Math.PI")
+      .replace(/\be\b/gi, "Math.E")
+      // Funções em português e inglês.
+      .replace(/\barcsen\s*\(/gi, "Math.asin(")
+      .replace(/\barcsin\s*\(/gi, "Math.asin(")
+      .replace(/\barccos\s*\(/gi, "Math.acos(")
+      .replace(/\barctg\s*\(/gi, "Math.atan(")
+      .replace(/\barctan\s*\(/gi, "Math.atan(")
+      .replace(/\basen\s*\(/gi, "Math.asin(")
+      .replace(/\basin\s*\(/gi, "Math.asin(")
+      .replace(/\bacos\s*\(/gi, "Math.acos(")
+      .replace(/\batg\s*\(/gi, "Math.atan(")
+      .replace(/\batan\s*\(/gi, "Math.atan(")
+      .replace(/\basinh\s*\(/gi, "Math.asinh(")
+      .replace(/\bacosh\s*\(/gi, "Math.acosh(")
+      .replace(/\batanh\s*\(/gi, "Math.atanh(")
+      .replace(/\bsenh\s*\(/gi, "Math.sinh(")
+      .replace(/\bcosh\s*\(/gi, "Math.cosh(")
+      .replace(/\btgh\s*\(/gi, "Math.tanh(")
+      .replace(/\btanh\s*\(/gi, "Math.tanh(")
+      .replace(/\bsen\s*\(/gi, "Math.sin(")
+      .replace(/\bsin\s*\(/gi, "Math.sin(")
+      .replace(/\bcos\s*\(/gi, "Math.cos(")
+      .replace(/\btg\s*\(/gi, "Math.tan(")
+      .replace(/\btan\s*\(/gi, "Math.tan(")
+      .replace(/\bcotg\s*\(([^()]*)\)/gi, "(1/Math.tan($1))")
+      .replace(/\bcot\s*\(([^()]*)\)/gi, "(1/Math.tan($1))")
+      .replace(/\bsec\s*\(([^()]*)\)/gi, "(1/Math.cos($1))")
+      .replace(/\bcsc\s*\(([^()]*)\)/gi, "(1/Math.sin($1))")
+      // log = base 10; ln = logaritmo natural (base e).
+      // A ordem é importante: ln(x) vira Math.log(x) e não pode
+      // passar depois pelo conversor de log(x).
+      .replace(/\blog10\s*\(/gi, "Math.log10(")
+      .replace(/\blog\s*\(/gi, "Math.log10(")
+      .replace(/\bln\s*\(/gi, "Math.log(")
+      .replace(/\bsqrt\s*\(/gi, "Math.sqrt(")
+      .replace(/\braiz\s*\(/gi, "Math.sqrt(")
+      .replace(/\babs\s*\(/gi, "Math.abs(")
+      .replace(/\bexp\s*\(/gi, "Math.exp(")
+      .replace(/\bceil\s*\(/gi, "Math.ceil(")
+      .replace(/\bfloor\s*\(/gi, "Math.floor(")
+      .replace(/\bround\s*\(/gi, "Math.round(")
+      .replace(/\bsign\s*\(/gi, "Math.sign(")
+      .replace(/\^/g, "**");
+
+    // Permite escrever, por exemplo, ln(x), ln x, sen(x), sen x, cos(x), cos x.
+    // As versões sem parênteses recebem um único argumento simples.
+    var funcs = [
+      "Math\\.asin","Math\\.acos","Math\\.atan","Math\\.asinh","Math\\.acosh","Math\\.atanh",
+      "Math\\.sin","Math\\.cos","Math\\.tan","Math\\.sinh","Math\\.cosh","Math\\.tanh",
+      "Math\\.log","Math\\.log10","Math\\.sqrt","Math\\.abs","Math\\.exp","Math\\.ceil","Math\\.floor","Math\\.round","Math\\.sign"
+    ];
+    funcs.forEach(function(fn){
+      var re = new RegExp("("+fn+")\\s+(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+|x))", "g");
+      src = src.replace(re, "$1($2)");
+    });
+
+    // Multiplicação implícita: 2x, 2(x), x(x), 3sen(x), 2π, 2e.
+    src = src.replace(/(\d|\)|x)\s*(?=x|\()/gi, "$1*")
+             .replace(/(Math\.PI|Math\.E|\))\s*(?=x|Math\.)/g, "$1*");
+
+    // Fecha as funções cot/sec/csc que foram convertidas para 1/f(...).
+    // Ex.: cot(x) -> (1/Math.tan(x)).
+    src = src.replace(/\(1\/Math\.(tan|cos|sin)\(([^()]*)\)\)/g, "(1/Math.$1($2))");
+
+    if (!src) throw new Error("Digite uma função.");
+    if (!/^[0-9xX+\-*/%().,\s_a-zA-Z*]+$/.test(src.replace(/\*\*/g,"*")))
+      throw new Error("A função contém caracteres não reconhecidos.");
+
+    var fn;
+    try{
+      fn = new Function("x", "\"use strict\"; return ("+src+");");
+    }catch(e){
+      throw new Error("Não foi possível interpretar a função. Use, por exemplo: ln(x), sen(x), cos(x), tan(x), sqrt(x), e^x ou x^2.");
+    }
+    return function(x){
+      var y = fn(x);
+      if (typeof y !== "number" || !isFinite(y)) return NaN;
+      return y;
+    };
+  }
+
+  function bisectionRun(expr, a0, b0, stopMode, numIter, tolerance){
+    var f = makeFunction(expr);
+    var a = Number(a0), b = Number(b0);
+    if (!isFinite(a) || !isFinite(b) || a >= b) throw new Error("O intervalo precisa ter a < b.");
+    var fa = f(a), fb = f(b);
+    if (!isFinite(fa) || !isFinite(fb)) throw new Error("A função não é definida em uma das extremidades.");
+    if (fa === 0) return {iterations:[{k:0,a:a,b:b,x:a,fx:0,error:null,sign:"zero",fa:fa,fb:fb}], root:a, rootFx:0, convergedAt:0, f:f};
+    if (fb === 0) return {iterations:[{k:0,a:a,b:b,x:b,fx:0,error:null,sign:"zero",fa:fa,fb:fb}], root:b, rootFx:0, convergedAt:0, f:f};
+    if (fa * fb > 0) throw new Error("O intervalo inicial não isola uma raiz: f(a)·f(b) precisa ser < 0.");
+
+    var rows = [];
+    // No modo "iterações", a contagem sempre começa em 0: colocar N gera
+    // as iterações 0, 1, 2, ..., N (ou seja, N+1 linhas na tabela).
+    var xPrev = null, convergedAt = null, max = stopMode === "tol" ? MAX_ITER : Math.max(1, numIter) + 1;
+    for (var k=0; k<max; k++){
+      var x = (a+b)/2, fx = f(x);
+      var err = xPrev === null ? null : (Math.abs(x-xPrev) / Math.abs(x));
+      var sign = fx === 0 ? "zero" : (fx < 0 ? "neg" : "pos");
+      rows.push({k:k,a:a,b:b,x:x,fx:fx,error:err,sign:sign,fa:fa,fb:fb});
+      if (fx === 0){ convergedAt=k; break; }
+      if (stopMode === "tol" && err !== null && err < tolerance){ convergedAt=k; break; }
+      if (fa * fx < 0){
+        b=x; fb=fx;
+      } else {
+        a=x; fa=fx;
+      }
+      xPrev=x;
+    }
+    var last=rows[rows.length-1];
+    return {iterations:rows, root:last.x, rootFx:last.fx, convergedAt:convergedAt, f:f};
+  }
+
+  function bisFmt(x){
+    if (x === null || x === undefined || !isFinite(x)) return "—";
+    return Math.abs(x) >= 1e6 || (Math.abs(x) > 0 && Math.abs(x) < 1e-5)
+      ? x.toExponential(6) : x.toFixed(8).replace(/0+$/,"").replace(/\.$/,"");
+  }
+  function bisErrorText(e){ return e === null ? "—" : bisFmt(e); }
+
+  // Escolhe um "passo" redondo (1, 2 ou 5 x potência de 10) pros números dos eixos
+  // do gráfico, em vez de dividir o intervalo em partes iguais (que gera números
+  // feios tipo 2.63157894). É a mesma ideia de escala usada em gráficos prontos:
+  // números inteiros quando dá, ou passos simples tipo 0.5, 1.5, 0.05...
+  function niceAxisStep(range, targetTicks){
+    if (!(range > 0)) return 1;
+    var rawStep = range / Math.max(1, targetTicks);
+    var mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    var norm = rawStep / mag;
+    var niceNorm = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+    return niceNorm * mag;
+  }
+
+  function niceAxisTicks(min, max, targetTicks){
+    var step = niceAxisStep(max - min, targetTicks);
+    var decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+    var start = Math.ceil((min - step*1e-9) / step) * step;
+    var values = [];
+    for (var v = start; v <= max + step*1e-9; v += step){
+      var r = parseFloat((Math.round(v/step)*step).toFixed(Math.min(decimals+2, 12)));
+      if (r >= min - step*1e-9 && r <= max + step*1e-9) values.push(r);
+    }
+    if (!values.length) values.push(parseFloat(((min+max)/2).toFixed(decimals)));
+    return {values: values, decimals: decimals};
+  }
+
+  // Formata um valor de eixo já "redondo": casas fixas pelo passo, sem zeros
+  // à direita sobrando (2.50 -> 2.5, 3.00 -> 3).
+  function niceAxisFmt(v, decimals){
+    if (!isFinite(v)) return "—";
+    var s = v.toFixed(decimals);
+    if (decimals > 0) s = s.replace(/0+$/,"").replace(/\.$/,"");
+    if (s === "-0") s = "0";
+    return s;
+  }
+
+  function renderBisection(run){
+    var body=document.getElementById("stepsBody");
+    body.innerHTML="";
+    var sum=document.createElement("div"); sum.className="bis-summary";
+    var stats=[
+      ["Raiz aproximada",bisFmt(run.root)],
+      ["f(x)",bisFmt(run.rootFx)],
+      ["Iterações",String(run.iterations.length)],
+      ["Critério",state.bisStopMode==="tol" ? "Eₖ < "+bisFmt(state.bisTolerance) : state.bisNumIter+" iterações"]
+    ];
+    stats.forEach(function(v){
+      var d=document.createElement("div"); d.className="bis-stat";
+      d.innerHTML="<small>"+v[0]+"</small><strong>"+v[1]+"</strong>"; sum.appendChild(d);
+    });
+    body.appendChild(sum);
+
+    var note=document.createElement("div"); note.className="hint"; note.style.margin="0 0 9px";
+    note.textContent="Eₖ = |xₖ − xₖ₋₁| / |xₖ|. Para k = 0, o erro não é definido.";
+    body.appendChild(note);
+
+    var wrap=document.createElement("div"); wrap.className="bis-table-wrap";
+    var t=document.createElement("table"); t.className="bis-table-grid";
+    var headers=["k","aₖ","bₖ","xₖ","f(xₖ)","Eₖ","sinal de f(xₖ)"];
+    var tr=document.createElement("tr");
+    headers.forEach(function(h){var th=document.createElement("th");th.textContent=h;tr.appendChild(th);});
+    t.appendChild(tr);
+    run.iterations.forEach(function(it){
+      var r=document.createElement("tr");
+      var vals=[it.k,bisFmt(it.a),bisFmt(it.b),bisFmt(it.x),bisFmt(it.fx),bisErrorText(it.error),
+                it.sign==="neg"?"negativo":it.sign==="pos"?"positivo":"zero"];
+      vals.forEach(function(v,c){
+        var td=document.createElement("td"); td.textContent=v;
+        if(c===6) td.className=it.sign==="neg"?"bis-sign-neg":it.sign==="pos"?"bis-sign-pos":"bis-sign-pos";
+        r.appendChild(td);
+      });
+      t.appendChild(r);
+    });
+    wrap.appendChild(t); body.appendChild(wrap);
+
+    var final=document.createElement("div"); final.className="final-box";
+    var h=document.createElement("h3"); h.textContent=run.convergedAt!==null ? "Critério atingido" : "Limite de iterações atingido";
+    final.appendChild(h);
+    var p=document.createElement("div"); p.style.fontSize="12.5px";
+    p.textContent=run.convergedAt!==null
+      ? (state.bisStopMode==="tol" ? "A tolerância foi satisfeita na iteração "+run.convergedAt+"." : "A raiz foi aproximada após "+run.iterations.length+" iterações.")
+      : (state.bisStopMode==="tol"
+          ? "A tolerância não foi atingida dentro do limite de "+MAX_ITER+" iterações."
+          : "O número de iterações definido ("+state.bisNumIter+") foi atingido sem que f(xₖ) chegasse a zero.");
+    final.appendChild(p); body.appendChild(final);
+  }
+
+  function renderBisectionTableOnly(run){
+    renderBisection(run);
+    document.getElementById("stepsBody").scrollIntoView({behavior:"smooth",block:"start"});
+  }
+
+  function drawBisectionGraph(run){
+    var svg=document.getElementById("bisGraphSvg");
+    var W=900,H=560, pad={l:65,r:25,t:25,b:55};
+    while(svg.firstChild) svg.removeChild(svg.firstChild);
+    function el(tag,attrs,text){
+      var n=document.createElementNS("http://www.w3.org/2000/svg",tag);
+      Object.keys(attrs||{}).forEach(function(k){n.setAttribute(k,attrs[k]);});
+      if(text!==undefined)n.textContent=text; svg.appendChild(n); return n;
+    }
+    var xs=run.iterations.map(function(d){return d.x;}).concat([run.iterations[0].a,run.iterations[0].b]);
+    var lo=Math.min.apply(null,xs), hi=Math.max.apply(null,xs);
+    var span=Math.max(hi-lo,1e-9), xMin=lo-span*.12, xMax=hi+span*.12;
+    var samples=500, pts=[], yVals=[];
+    for(var i=0;i<=samples;i++){
+      var x=xMin+(xMax-xMin)*i/samples, y=run.f(x);
+      if(isFinite(y)){pts.push([x,y]);yVals.push(y);}
+    }
+    var yMin=Math.min.apply(null,yVals), yMax=Math.max.apply(null,yVals);
+    var ys=Math.max(yMax-yMin,1e-9), yPad=ys*.15; yMin-=yPad; yMax+=yPad;
+    if(yMin>0)yMin=Math.min(0,yMin); if(yMax<0)yMax=Math.max(0,yMax);
+    function sx(x){return pad.l+(x-xMin)/(xMax-xMin)*(W-pad.l-pad.r);}
+    function sy(y){return H-pad.b-(y-yMin)/(yMax-yMin)*(H-pad.t-pad.b);}
+    // grid + números dos eixos: usa passos "redondos" (ex.: 1, 2, 5, 0.5, 0.05...)
+    // em vez de dividir o intervalo em partes iguais, pra não gerar números feios.
+    var xNice = niceAxisTicks(xMin, xMax, 8);
+    var yNice = niceAxisTicks(yMin, yMax, 6);
+    xNice.values.forEach(function(xv){
+      var xp=sx(xv);
+      el("line",{x1:xp,y1:pad.t,x2:xp,y2:H-pad.b,stroke:"var(--line-soft)","stroke-width":"1"});
+    });
+    yNice.values.forEach(function(yv){
+      var yp=sy(yv);
+      el("line",{x1:pad.l,y1:yp,x2:W-pad.r,y2:yp,stroke:"var(--line-soft)","stroke-width":"1"});
+    });
+    if(xMin<=0&&xMax>=0) el("line",{x1:sx(0),y1:pad.t,x2:sx(0),y2:H-pad.b,stroke:"var(--ink-faint)","stroke-width":"1.3"});
+    if(yMin<=0&&yMax>=0) el("line",{x1:pad.l,y1:sy(0),x2:W-pad.r,y2:sy(0),stroke:"var(--ink-faint)","stroke-width":"1.3"});
+    xNice.values.forEach(function(xv){
+      var xp=sx(xv);
+      el("line",{x1:xp,y1:H-pad.b,x2:xp,y2:H-pad.b+5,stroke:"var(--ink-faint)","stroke-width":"1"});
+      el("text",{x:xp,y:H-pad.b+19,fill:"var(--ink-soft)","font-size":"11","text-anchor":"middle"},niceAxisFmt(xv,xNice.decimals));
+    });
+    yNice.values.forEach(function(yv){
+      var yp=sy(yv);
+      el("line",{x1:pad.l-5,y1:yp,x2:pad.l,y2:yp,stroke:"var(--ink-faint)","stroke-width":"1"});
+      el("text",{x:pad.l-9,y:yp+4,fill:"var(--ink-soft)","font-size":"11","text-anchor":"end"},niceAxisFmt(yv,yNice.decimals));
+    });
+    var d=pts.map(function(p,i){return (i?"L":"M")+sx(p[0]).toFixed(2)+" "+sy(p[1]).toFixed(2);}).join(" ");
+    el("path",{d:d,fill:"none",stroke:"var(--ink)","stroke-width":"2.4","stroke-linecap":"round"});
+    var first=run.iterations[0], last=run.iterations[run.iterations.length-1];
+    [first.a,first.b].forEach(function(x){var y=run.f(x); if(isFinite(y))el("circle",{cx:sx(x),cy:sy(y),r:5,fill:"var(--danger)"});});
+    run.iterations.forEach(function(it,i){
+      if(isFinite(it.fx)) el("circle",{cx:sx(it.x),cy:sy(it.fx),r:i===run.iterations.length-1?7:4.5,fill:i===run.iterations.length-1?"var(--brass)":"var(--teal)"});
+    });
+    el("text",{x:W-pad.r,y:H-16,fill:"var(--ink-soft)","font-size":"13","text-anchor":"end"},"x");
+    el("text",{x:18,y:pad.t+4,fill:"var(--ink-soft)","font-size":"13"},"f(x)");
+    el("text",{x:pad.l,y:H-16,fill:"var(--ink-faint)","font-size":"11"},"a = "+bisFmt(first.a));
+    el("text",{x:W-pad.r,y:H-16,fill:"var(--ink-faint)","font-size":"11","text-anchor":"end"},"b = "+bisFmt(first.b));
+  }
+
+  function runCurrentBisection(){
+    try{
+      var run=bisectionRun(state.bisFunction,state.bisA,state.bisB,state.bisStopMode,state.bisNumIter,state.bisTolerance);
+      lastComputation={method:"bissecao",run:run};
+      renderBisection(run);
+      return run;
+    }catch(err){
+      lastComputation=null;
+      var body=document.getElementById("stepsBody"); body.innerHTML="";
+      var d=document.createElement("div"); d.className="final-box";
+      var h=document.createElement("h3"); h.textContent="Não foi possível calcular";
+      d.appendChild(h); var p=document.createElement("div"); p.style.fontSize="12.5px"; p.textContent=err.message||"Verifique a função e o intervalo.";
+      d.appendChild(p); body.appendChild(d); return null;
+    }
+  }
+
   // ---------- UI: matrix editor ----------
   function buildEditor(){
     var wrap = document.getElementById("matrixEditor");
     wrap.innerHTML = "";
     var caption = document.getElementById("matrixCaption");
 
-    if (state.method === "gauss"){
+    if (state.method === "bissecao"){
+      // Os controles da Bisseção ficam em um único painel acima.
+      // Não duplicar função/intervalo no editor central.
+      document.getElementById("matrixHead").textContent = "BISSEÇÃO";
+      caption.textContent = "Use os campos de função, A e B acima para configurar o intervalo inicial.";
+    } else if (state.method === "gauss"){
       resizeGauss();
       document.getElementById("matrixHead").textContent = "MATRIZ AUMENTADA [A | b]";
       caption.textContent = "As "+state.cols+" primeiras colunas são os coeficientes; a última (destacada) é o vetor b.";
@@ -1805,6 +2258,7 @@ if rhoOk then
   var lastComputation = null;
 
   function matrizVazia(){
+    if (state.method === "bissecao") return !String(state.bisFunction || "").trim();
     var zero = function(v){ return !Number(v); };
     return state.A.every(function(r){ return r.every(zero); }) &&
            (state.method === "gauss" || (state.b || []).every(zero));
@@ -1814,7 +2268,20 @@ if rhoOk then
     document.getElementById("stepsHead").textContent =
       state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
       state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" :
-      state.method === "seidel" ? "PASSO A PASSO — GAUSS-SEIDEL" : "PASSO A PASSO — JACOBI";
+      state.method === "seidel" ? "PASSO A PASSO — GAUSS-SEIDEL" :
+      state.method === "bissecao" ? "PASSO A PASSO — BISSEÇÃO" : "PASSO A PASSO — JACOBI";
+
+    if (state.method === "bissecao"){
+      var bRun=runCurrentBisection();
+      var bReady = !!bRun;
+      document.getElementById("btnPdfScilab").disabled = !bReady;
+      document.getElementById("btnPreviewOne").disabled = !bReady;
+      document.getElementById("btnScilabCode").disabled = !bReady;
+      var bh=document.getElementById("pdfHint");
+      if (bh) bh.textContent = bReady ? "Função válida: Visualizar, Baixar PDF e Código Scilab (.sce) estão disponíveis." : "Digite uma função e um intervalo válido para habilitar o download.";
+      return;
+    }
+
     if (matrizVazia()){
       // matriz zerada (ex.: depois de "Limpar"): nada de cálculo, nem 3000 iterações
       lastComputation = null;
@@ -1889,8 +2356,10 @@ if rhoOk then
 
   function syncDimsHint(m){
     var h = document.getElementById("dimsHint");
-    h.textContent = m === "gauss" ? "A última coluna é o vetor b (termos independentes). Máximo: 6×6." : "";
-    h.style.display = m === "gauss" ? "" : "none";
+    h.textContent = m === "gauss" ? "A última coluna é o vetor b (termos independentes). Máximo: 6×6."
+      : m === "bissecao" ? "Método da Lista 3: intervalo inicial aberto para você informar e critério por iterações ou tolerância."
+      : "";
+    h.style.display = (m === "gauss" || m === "bissecao") ? "" : "none";
   }
 
   function setMethod(m){
@@ -1902,8 +2371,11 @@ if rhoOk then
       el.classList.toggle("active", el.dataset.method === m);
     });
     document.getElementById("jacobiParams").style.display = (m === "jacobi" || m === "seidel") ? "flex" : "none";
+    document.getElementById("bisectionParams").style.display = m === "bissecao" ? "flex" : "none";
     document.getElementById("rowsField").style.display = m === "gauss" ? "flex" : "none";
+    document.getElementById("colsField").style.display = m === "bissecao" ? "none" : "flex";
     document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
+    document.getElementById("dimsPanel").classList.toggle("dims-full", m === "bissecao");
     syncDimsHint(m);
     if (m !== "gauss"){ document.getElementById("colsVal").textContent = state.jn; }
     else { document.getElementById("colsVal").textContent = state.cols; document.getElementById("rowsVal").textContent = state.rows; }
@@ -1974,6 +2446,14 @@ if rhoOk then
       state.A = [[3,2,4],[1,1,2],[4,3,2]];
       state.b = [1,2,3];
       document.getElementById("colsVal").textContent = state.jn;
+    } else if (state.method === "bissecao"){
+      state.bisFunction = "x^3 - 2*x - 5";
+      state.bisA = 2; state.bisB = 3; state.bisNumIter = 5; state.bisStopMode = "iter"; state.bisTolerance = 0.001;
+      document.getElementById("bisFunction").value = state.bisFunction;
+      document.getElementById("bisA").value = state.bisA; document.getElementById("bisB").value = state.bisB;
+      document.getElementById("bisNumIter").value = state.bisNumIter; document.getElementById("bisTolerance").value = state.bisTolerance;
+      document.getElementById("bisStopIter").checked = true; document.getElementById("bisStopTol").checked = false;
+      document.getElementById("bisFieldNumIter").style.display = ""; document.getElementById("bisFieldTolerance").style.display = "none";
     } else if (state.method === "seidel"){
       state.jn = 4;
       state.A = [[9,1,-2,2],[1,15,-3,2],[1,-2,8,3],[2,2,1,12]];
@@ -1991,10 +2471,48 @@ if rhoOk then
   });
 
   document.getElementById("btnClear").addEventListener("click", function(){
-    if (state.method === "gauss"){ state.A = mk(state.rows, state.cols+1, 0); }
+    if (state.method === "bissecao"){
+      state.bisFunction = ""; state.bisA = 0; state.bisB = 1;
+      document.getElementById("bisFunction").value = "";
+      document.getElementById("bisA").value = 0; document.getElementById("bisB").value = 1;
+    } else if (state.method === "gauss"){ state.A = mk(state.rows, state.cols+1, 0); }
     else { state.A = mk(state.jn, state.jn, 0); state.b = new Array(state.jn).fill(0); }
     buildEditor(); render(); saveLocal();
   });
+
+  // ---------- controles da Bisseção ----------
+  function syncBisControls(){
+    document.getElementById("bisFieldNumIter").style.display = state.bisStopMode === "iter" ? "" : "none";
+    document.getElementById("bisFieldTolerance").style.display = state.bisStopMode === "tol" ? "" : "none";
+  }
+  document.querySelectorAll("input[name='bisStopMode']").forEach(function(radio){
+    radio.addEventListener("change",function(){
+      state.bisStopMode=this.value; syncBisControls(); saveLocal(); render();
+    });
+  });
+  document.getElementById("bisFunction").addEventListener("input",function(){
+    state.bisFunction=this.value; saveLocal(); if(state.method==="bissecao") render();
+  });
+  document.getElementById("bisA").addEventListener("input",function(){
+    var v=parseFloat(this.value); if(isFinite(v)){state.bisA=v;saveLocal();if(state.method==="bissecao")render();}
+  });
+  document.getElementById("bisB").addEventListener("input",function(){
+    var v=parseFloat(this.value); if(isFinite(v)){state.bisB=v;saveLocal();if(state.method==="bissecao")render();}
+  });
+  document.getElementById("bisNumIter").addEventListener("input",function(){
+    var v=parseInt(this.value,10); state.bisNumIter=isNaN(v)?1:Math.max(1,Math.min(MAX_ITER,v)); saveLocal(); if(state.method==="bissecao")render();
+  });
+  document.getElementById("bisTolerance").addEventListener("input",function(){
+    var v=parseFloat(this.value); if(isFinite(v)&&v>0){state.bisTolerance=v;saveLocal();if(state.method==="bissecao")render();}
+  });
+  document.getElementById("btnBisTable").addEventListener("click",function(){if(state.method==="bissecao"){var r=runCurrentBisection();if(r)renderBisectionTableOnly(r);}});
+  document.getElementById("btnBisGraph").addEventListener("click",function(){
+    if(state.method!=="bissecao")return;
+    var r=runCurrentBisection(); if(!r)return;
+    drawBisectionGraph(r); document.getElementById("bisGraphModal").classList.add("open");
+  });
+  document.getElementById("bisGraphClose").addEventListener("click",function(){document.getElementById("bisGraphModal").classList.remove("open");});
+  document.getElementById("bisGraphModal").addEventListener("click",function(e){if(e.target===this)this.classList.remove("open");});
 
   // ---------- header (identificação do PDF) ----------
   var chkHeaderEl = document.getElementById("chkHeader");
@@ -2011,6 +2529,12 @@ if rhoOk then
   headerQuestionEl.addEventListener("input", function(){ state.headerQuestion = headerQuestionEl.value; saveLocal(); });
 
   // ---------- gráfico de convergência no PDF Scilab (Jacobi) ----------
+  var chkBisChartEl = document.getElementById("chkBisChart");
+  chkBisChartEl.addEventListener("change", function(){
+    state.bisChartOn = chkBisChartEl.checked;
+    saveLocal();
+  });
+
   var chkScilabChartEl = document.getElementById("chkScilabChart");
   chkScilabChartEl.addEventListener("change", function(){
     state.scilabChartOn = chkScilabChartEl.checked;
@@ -2070,9 +2594,6 @@ if rhoOk then
       if (opts.align) o.align = opts.align;
       doc.text(asciiClean(str), x, yy, o);
     }
-
-    var today = new Date();
-    var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
 
     // Identification block — replica o cabeçalho das listas/atividades do IFMG:
     // marca do instituto + linhas de Disciplina/Curso, Professora e Aluno(a)
@@ -2361,7 +2882,7 @@ if rhoOk then
   async function downloadPdf(){
     var doc = buildPdf();
     if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : "jacobi"));
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : (state.method === "bissecao" ? "bissecao" : "jacobi")));
     var filename = nomeMetodo + "-passo-a-passo.pdf";
     var blob = doc.output("blob");
     try{
@@ -2524,6 +3045,9 @@ if rhoOk then
       y += 14.4;
     }
     function blank(h){ y += (h || 9); }
+    function rowB(txt){
+      ensureSpace(14); monoGrid(8.5, INK); doc.text(asciiClean(txt), margin, y); y += 11;
+    }
     function drawScMatrix(mtx, augAt){
       var rows = scMatrixLines(mtx, augAt);
       ensureSpace(rows.length*14.4 + 4);
@@ -2536,8 +3060,6 @@ if rhoOk then
     function drawQuestion(st, comp){
       // cabeçalho de identificação, em formato de comentário de código
       if (st.headerOn){
-        var today = new Date();
-        var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
         mono(12, INK);
         var rule = "// "+Array(64).join("-");
         line(rule);
@@ -2545,7 +3067,6 @@ if rhoOk then
         line("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
         line("// Professora: Lucélia Radin");
         line("// Aluno(a): "+(st.headerName || "_________________________"));
-        line("// Data: "+dateStr);
         line(rule);
         blank(11);
       }
@@ -2556,7 +3077,67 @@ if rhoOk then
       line("// "+questionTitle);
       blank(7);
 
-      if (comp.method === "gauss"){
+      if (comp.method === "bissecao"){
+        var br = comp.run;
+        line("f(x) = " + st.bisFunction);
+        line("Intervalo inicial: [" + bisFmt(st.bisA) + ", " + bisFmt(st.bisB) + "]");
+        line("Critério: " + (st.bisStopMode === "tol" ? "tolerância E_k < " + bisFmt(st.bisTolerance) : st.bisNumIter + " iterações (0 até " + st.bisNumIter + ")"));
+        blank(6);
+        line("// Tabela de iterações");
+        var bh = ["k","a_k","b_k","x_k","f(x_k)","E_k","sinal de f(x_k)"];
+        var brs = br.iterations.map(function(it){ return [String(it.k),bisFmt(it.a),bisFmt(it.b),bisFmt(it.x),bisFmt(it.fx),bisErrorText(it.error),it.sign === "neg" ? "negativo" : it.sign === "pos" ? "positivo" : "zero"]; });
+        var bw = bh.map(function(h,c){ var m=h.length; brs.forEach(function(r){m=Math.max(m,r[c].length);}); return m; });
+        function bRow(r){ return r.map(function(v,c){ return c===0 ? v.padEnd(bw[c]) : v.padStart(bw[c]); }).join("   "); }
+        rowB(bRow(bh));
+        brs.forEach(function(r){ rowB(bRow(r)); });
+        blank(8);
+        line("// Raiz aproximada: " + bisFmt(br.root));
+        line("// f(x) = " + bisFmt(br.rootFx));
+        if (br.convergedAt !== null) line("// Critério atingido na iteração " + br.convergedAt + ".");
+        if (st.bisChartOn){
+          blank(10);
+          line("// Gráfico da função e pontos da bisseção");
+          ensureSpace(265);
+          var gx0=margin, gy0=y, gw=pageW-margin*2, gh=210;
+          var pnts=br.iterations.map(function(it){return it.x;}).concat([br.iterations[0].a,br.iterations[0].b]);
+          var glo=Math.min.apply(null,pnts), ghi=Math.max.apply(null,pnts), gspan=Math.max(ghi-glo,1e-9);
+          var gxmin=glo-gspan*.12, gxmax=ghi+gspan*.12;
+          var gys=[]; for(var gi=0;gi<=180;gi++){var xx=gxmin+(gxmax-gxmin)*gi/180, yy=br.f(xx);if(isFinite(yy))gys.push(yy);}
+          var gymin=Math.min.apply(null,gys), gymax=Math.max.apply(null,gys), gyspan=Math.max(gymax-gymin,1e-9);
+          gymin-=gyspan*.15; gymax+=gyspan*.15; if(gymin>0)gymin=0;if(gymax<0)gymax=0;
+          function psx(x){return gx0+(x-gxmin)/(gxmax-gxmin)*gw;} function psy(v){return gy0+gh-(v-gymin)/(gymax-gymin)*gh;}
+          var gxNice = niceAxisTicks(gxmin, gxmax, 8);
+          var gyNice = niceAxisTicks(gymin, gymax, 6);
+          doc.setDrawColor(225,225,225); doc.setLineWidth(.5);
+          gxNice.values.forEach(function(gxv){var qx=psx(gxv);doc.line(qx,gy0,qx,gy0+gh);});
+          gyNice.values.forEach(function(gyv){var qy=psy(gyv);doc.line(gx0,qy,gx0+gw,qy);});
+          if(gxmin<=0&&gxmax>=0){doc.setDrawColor(150,150,150);doc.setLineWidth(.8);doc.line(psx(0),gy0,psx(0),gy0+gh);}
+          if(gymin<=0&&gymax>=0){doc.setDrawColor(150,150,150);doc.setLineWidth(.8);doc.line(gx0,psy(0),gx0+gw,psy(0));}
+          // Números nos eixos (mesma ideia da tela: dá pra ler a escala do gráfico).
+          doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(120,120,120);doc.setDrawColor(170,170,170);doc.setLineWidth(.5);
+          gxNice.values.forEach(function(gxv){var gxp=psx(gxv);doc.line(gxp,gy0+gh,gxp,gy0+gh+3);doc.text(niceAxisFmt(gxv,gxNice.decimals),gxp,gy0+gh+11,{align:"center"});});
+          gyNice.values.forEach(function(gyv){var gyp=psy(gyv);doc.line(gx0-3,gyp,gx0,gyp);doc.text(niceAxisFmt(gyv,gyNice.decimals),gx0-5,gyp+2.2,{align:"right"});});
+          doc.setDrawColor(35,35,35);doc.setLineWidth(1.5);var prev=null;
+          for(var gi3=0;gi3<=320;gi3++){var fx=gxmin+(gxmax-gxmin)*gi3/320, fy=br.f(fx);if(!isFinite(fy)){prev=null;continue;}var cx=psx(fx),cy=psy(fy);if(prev)doc.line(prev[0],prev[1],cx,cy);prev=[cx,cy];}
+          doc.setFillColor(190,65,65);br.iterations.slice(0,1).forEach(function(it){doc.circle(psx(it.a),psy(br.f(it.a)),3,"F");doc.circle(psx(it.b),psy(br.f(it.b)),3,"F");});
+          br.iterations.forEach(function(it,ii){doc.setFillColor(ii===br.iterations.length-1?190:40,ii===br.iterations.length-1?145:150,ii===br.iterations.length-1?40:150);doc.circle(psx(it.x),psy(it.fx),ii===br.iterations.length-1?4:2.5,"F");});
+          doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text("a = "+bisFmt(br.iterations[0].a),gx0,gy0+gh+22);doc.text("b = "+bisFmt(br.iterations[0].b),gx0+gw,gy0+gh+22,{align:"right"});
+          // Legenda das cores — pra ficar claro o que cada bolinha representa.
+          var legY=gy0+gh+36, legX=gx0;
+          function legendItem(dotColor, label, isLine){
+            if (isLine){ doc.setDrawColor.apply(doc,dotColor); doc.setLineWidth(1.6); doc.line(legX,legY-2.2,legX+11,legY-2.2); }
+            else { doc.setFillColor.apply(doc,dotColor); doc.circle(legX+5,legY-2.2,2.6,"F"); }
+            doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90,90,90);
+            doc.text(label,legX+15,legY);
+            legX += 15 + doc.getTextWidth(label) + 16;
+          }
+          legendItem([35,35,35],"f(x)",true);
+          legendItem([190,65,65],"extremos do intervalo");
+          legendItem([40,150,150],"pontos médios");
+          legendItem([190,145,40],"raiz aproximada");
+          y=legY+16;
+        }
+      } else if (comp.method === "gauss"){
         var todos = comp.steps;
         linePrompt("-->A");
         drawScMatrix(todos[0].matrix, st.cols);
@@ -2735,15 +3316,12 @@ if rhoOk then
 
     function drawQuestionText(st, comp){
       if (st.headerOn){
-        var today = new Date();
-        var dateStr = String(today.getDate()).padStart(2,"0")+"/"+String(today.getMonth()+1).padStart(2,"0")+"/"+today.getFullYear();
         var rule = "// "+Array(64).join("-");
         push(rule);
         push("// Instituto Federal de Minas Gerais - Campus Santa Luzia");
         push("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
         push("// Professora: Lucélia Radin");
         push("// Aluno(a): "+(st.headerName || "_________________________"));
-        push("// Data: "+dateStr);
         push(rule);
         blankLine();
       }
@@ -2752,7 +3330,24 @@ if rhoOk then
       push("// "+questionTitle);
       blankLine();
 
-      if (comp.method === "gauss"){
+      if (comp.method === "bissecao"){
+        var br = comp.run;
+        push("f(x) = " + st.bisFunction);
+        push("Intervalo inicial: [" + bisFmt(st.bisA) + ", " + bisFmt(st.bisB) + "]");
+        push("Critério: " + (st.bisStopMode === "tol" ? "tolerância E_k < " + bisFmt(st.bisTolerance) : st.bisNumIter + " iterações (0 até " + st.bisNumIter + ")"));
+        blankLine();
+        push("// Tabela de iterações");
+        var bh=["k","a_k","b_k","x_k","f(x_k)","E_k","sinal de f(x_k)"];
+        var brs=br.iterations.map(function(it){return [String(it.k),bisFmt(it.a),bisFmt(it.b),bisFmt(it.x),bisFmt(it.fx),bisErrorText(it.error),it.sign === "neg" ? "negativo" : it.sign === "pos" ? "positivo" : "zero"];});
+        var bw=bh.map(function(h,c){var m=h.length;brs.forEach(function(r){m=Math.max(m,r[c].length);});return m;});
+        function bRow(r){return r.map(function(v,c){return c===0?v.padEnd(bw[c]):v.padStart(bw[c]);}).join("   ");}
+        push(bRow(bh)); brs.forEach(function(r){push(bRow(r));});
+        blankLine();
+        push("// Raiz aproximada: " + bisFmt(br.root));
+        push("// f(x) = " + bisFmt(br.rootFx));
+        if(br.convergedAt!==null) push("// Critério atingido na iteração " + br.convergedAt + ".");
+        if(st.bisChartOn) push("// Gráfico da função e pontos da bisseção (com escala e legenda): incluído no PDF.");
+      } else if (comp.method === "gauss"){
         var todos = comp.steps;
         push("-->A");
         matrixLines(todos[0].matrix, st.cols);
@@ -2997,14 +3592,14 @@ if rhoOk then
 
   document.getElementById("btnPreviewOne").addEventListener("click", function(){
     if (!lastComputation) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : "jacobi"));
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : (state.method === "bissecao" ? "bissecao" : "jacobi")));
     openPreviewModal([{st: state, comp: lastComputation}], nomeMetodo + "-scilab-editado", "Visualizar — questão atual");
   });
 
   async function downloadScilabPdf(){
     var doc = buildScilabPdf();
     if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : "jacobi"));
+    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : (state.method === "bissecao" ? "bissecao" : "jacobi")));
     var filename = nomeMetodo + "-scilab.pdf";
     var blob = doc.output("blob");
     try{
@@ -3055,6 +3650,9 @@ if rhoOk then
 
   // mesma lógica do render(), mas a partir de um estado guardado (sem tocar na tela)
   function computeFor(st){
+    // A bisseção não usa matriz A/b: recalculamos diretamente a partir da
+    // função, intervalo e critério que foram salvos junto com a questão.
+    if (st.method === "bissecao") return {method:"bissecao", run: bisectionRun(st.bisFunction, st.bisA, st.bisB, st.bisStopMode, st.bisNumIter, st.bisTolerance)};
     if (st.method === "lu") return {method:"lu", run: luSteps(st.A, st.b)};
     if (st.method === "gauss") return {method:"gauss", steps: gaussJordanSteps(st.A)};
     var diag0 = st.A.some(function(row, i){ return Math.abs(row[i]) < 1e-9; });
@@ -3064,16 +3662,33 @@ if rhoOk then
   }
 
   function savedTitle(st){ return st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão"; }
-  function savedMethodName(st){ return st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : "Jacobi")); }
+  function savedMethodName(st){ return st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : "Jacobi"))); }
 
   function renderSaved(){
     var panel = document.getElementById("savedPanel");
     var list = document.getElementById("savedList");
     panel.style.display = savedQuestions.length ? "" : "none";
     list.innerHTML = "";
-    savedQuestions.forEach(function(q){
+    savedQuestions.forEach(function(q, idx){
       var item = document.createElement("div");
       item.className = "saved-item";
+      item.draggable = true;
+      item.dataset.id = String(q.id);
+
+      var move = document.createElement("div");
+      move.className = "saved-move";
+      var up = document.createElement("button");
+      up.type = "button"; up.className = "saved-move-btn"; up.textContent = "▲";
+      up.dataset.id = String(q.id); up.dataset.dir = "up";
+      up.title = "Mover para cima"; up.setAttribute("aria-label", "Mover " + savedTitle(q.st) + " para cima");
+      if (idx === 0) up.disabled = true;
+      var down = document.createElement("button");
+      down.type = "button"; down.className = "saved-move-btn"; down.textContent = "▼";
+      down.dataset.id = String(q.id); down.dataset.dir = "down";
+      down.title = "Mover para baixo"; down.setAttribute("aria-label", "Mover " + savedTitle(q.st) + " para baixo");
+      if (idx === savedQuestions.length - 1) down.disabled = true;
+      move.appendChild(up); move.appendChild(down);
+
       var txt = document.createElement("div");
       txt.className = "saved-txt";
       var t = document.createElement("div");
@@ -3088,9 +3703,30 @@ if rhoOk then
       x.dataset.id = String(q.id);
       x.setAttribute("aria-label", "Excluir " + savedTitle(q.st));
       x.title = "Excluir";
-      item.appendChild(txt); item.appendChild(x);
+      item.appendChild(move); item.appendChild(txt); item.appendChild(x);
       list.appendChild(item);
     });
+  }
+
+  function moveSaved(id, dir){
+    var i = savedQuestions.findIndex(function(q){ return q.id === id; });
+    if (i === -1) return;
+    var j = dir === "up" ? i - 1 : i + 1;
+    if (j < 0 || j >= savedQuestions.length) return;
+    var tmp = savedQuestions[i];
+    savedQuestions[i] = savedQuestions[j];
+    savedQuestions[j] = tmp;
+    persistSaved(); renderSaved();
+  }
+
+  function reorderSaved(draggedId, targetId){
+    if (draggedId === targetId) return;
+    var from = savedQuestions.findIndex(function(q){ return q.id === draggedId; });
+    var to = savedQuestions.findIndex(function(q){ return q.id === targetId; });
+    if (from === -1 || to === -1) return;
+    var moved = savedQuestions.splice(from, 1)[0];
+    savedQuestions.splice(to, 0, moved);
+    persistSaved(); renderSaved();
   }
 
   document.getElementById("btnSaveQuestion").addEventListener("click", function(){
@@ -3103,11 +3739,42 @@ if rhoOk then
   });
 
   document.getElementById("savedList").addEventListener("click", function(e){
+    var moveBtn = e.target.closest(".saved-move-btn");
+    if (moveBtn){
+      moveSaved(parseInt(moveBtn.dataset.id, 10), moveBtn.dataset.dir);
+      return;
+    }
     var btn = e.target.closest(".saved-x");
     if (!btn) return;
     var id = parseInt(btn.dataset.id, 10);
     savedQuestions = savedQuestions.filter(function(q){ return q.id !== id; });
     persistSaved(); renderSaved();
+  });
+
+  // ---------- arrastar para reordenar (desktop) ----------
+  var dragSrcId = null;
+  document.getElementById("savedList").addEventListener("dragstart", function(e){
+    var item = e.target.closest(".saved-item");
+    if (!item) return;
+    dragSrcId = parseInt(item.dataset.id, 10);
+    item.classList.add("dragging");
+    if (e.dataTransfer){ e.dataTransfer.effectAllowed = "move"; try{ e.dataTransfer.setData("text/plain", String(dragSrcId)); }catch(err){} }
+  });
+  document.getElementById("savedList").addEventListener("dragend", function(e){
+    var item = e.target.closest(".saved-item");
+    if (item) item.classList.remove("dragging");
+    dragSrcId = null;
+  });
+  document.getElementById("savedList").addEventListener("dragover", function(e){
+    if (e.target.closest(".saved-item")) e.preventDefault();
+  });
+  document.getElementById("savedList").addEventListener("drop", function(e){
+    var item = e.target.closest(".saved-item");
+    if (!item || dragSrcId === null) return;
+    e.preventDefault();
+    var targetId = parseInt(item.dataset.id, 10);
+    reorderSaved(dragSrcId, targetId);
+    dragSrcId = null;
   });
 
   async function saveBlobFile(blob, filename){
@@ -3275,8 +3942,6 @@ endfunction
       code += sceEscreve("// Disciplina: Cálculo Numérico          Curso: Engenharia Civil");
       code += sceEscreve("// Professora: Lucélia Radin");
       code += sceEscreve("// Aluno(a): " + (state.headerName || "_________________________"));
-      code += "dt = getdate();\n";
-      code += "mprintf(\"// Data: %02d/%02d/%d\\n\", dt(6), dt(2), dt(1));\n";
       code += sceEscreve(rule);
       code += sceEscreve("");
     }
@@ -3624,8 +4289,238 @@ end
 `;
   }
 
+  // ---------- Bisseção: f(x) digitada no site -> expressão válida em Scilab ----------
+  // Mesma ideia do makeFunction (que converte pra JS), só que o destino aqui
+  // é a sintaxe do Scilab: sen/ln/raiz etc. viram sin/log/sqrt, π e "e" viram
+  // %pi e %e, e multiplicação implícita (2x, 3sen(x)...) ganha o "*".
+  function bisExprToScilab(expr){
+    var src = String(expr || "").trim()
+      .replace(/−/g, "-").replace(/[×·]/g, "*").replace(/÷/g, "/")
+      .replace(/π/gi, "%pi").replace(/\bpi\b/gi, "%pi").replace(/\be\b/gi, "%e");
+
+    var funcMap = [
+      [/\barcsen\s*\(/gi, "asin("], [/\barcsin\s*\(/gi, "asin("], [/\barccos\s*\(/gi, "acos("],
+      [/\barctg\s*\(/gi, "atan("], [/\barctan\s*\(/gi, "atan("],
+      [/\basen\s*\(/gi, "asin("], [/\basin\s*\(/gi, "asin("], [/\bacos\s*\(/gi, "acos("],
+      [/\batg\s*\(/gi, "atan("], [/\batan\s*\(/gi, "atan("],
+      [/\basinh\s*\(/gi, "asinh("], [/\bacosh\s*\(/gi, "acosh("], [/\batanh\s*\(/gi, "atanh("],
+      [/\bsenh\s*\(/gi, "sinh("], [/\bcosh\s*\(/gi, "cosh("],
+      [/\btgh\s*\(/gi, "tanh("], [/\btanh\s*\(/gi, "tanh("],
+      [/\bsen\s*\(/gi, "sin("], [/\bsin\s*\(/gi, "sin("], [/\bcos\s*\(/gi, "cos("],
+      [/\btg\s*\(/gi, "tan("], [/\btan\s*\(/gi, "tan("],
+      [/\bcotg\s*\(([^()]*)\)/gi, "(1/tan($1))"], [/\bcot\s*\(([^()]*)\)/gi, "(1/tan($1))"],
+      [/\bsec\s*\(([^()]*)\)/gi, "(1/cos($1))"], [/\bcsc\s*\(([^()]*)\)/gi, "(1/sin($1))"],
+      [/\blog10\s*\(/gi, "log10("], [/\blog\s*\(/gi, "log10("], [/\bln\s*\(/gi, "log("],
+      [/\bsqrt\s*\(/gi, "sqrt("], [/\braiz\s*\(/gi, "sqrt("],
+      [/\babs\s*\(/gi, "abs("], [/\bexp\s*\(/gi, "exp("],
+      [/\bceil\s*\(/gi, "ceil("], [/\bfloor\s*\(/gi, "floor("], [/\bround\s*\(/gi, "round("], [/\bsign\s*\(/gi, "sign("]
+    ];
+    funcMap.forEach(function(pair){ src = src.replace(pair[0], pair[1]); });
+
+    var fnNames = ["asin","acos","atan","asinh","acosh","atanh","sin","cos","tan","sinh","cosh","tanh","log10","log","sqrt","abs","exp","ceil","floor","round","sign"];
+    fnNames.forEach(function(fn){
+      var re = new RegExp("\\b("+fn+")\\s+(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+|x))\\b", "g");
+      src = src.replace(re, "$1($2)");
+    });
+    var fnAlt = fnNames.join("|");
+    src = src.replace(new RegExp("(\\d|\\)|x)\\s*(?=x\\b|\\(|(?:"+fnAlt+")\\()", "gi"), "$1*")
+             .replace(/(%pi|%e|\))\s*(?=x\b|[a-z])/gi, "$1*");
+
+    if (!src) src = "0";
+    return src;
+  }
+
+  function buildScilabCodeBissecao(){
+    if (!lastComputation || lastComputation.method !== "bissecao") return "";
+    var expr = bisExprToScilab(state.bisFunction);
+    var tolMode = state.bisStopMode === "tol";
+    var SCE_HELP_BIS = String.raw`function s = fnum8(x)
+    // até 8 casas decimais, sem zeros à direita (mesma precisão da bisseção no site)
+    if isnan(x) | isinf(x) then
+        s = "-";
+        return
+    end
+    r = floor(x*1e8 + 0.5)/1e8;
+    if r == 0 then r = 0; end
+    s = msprintf("%.8f", r);
+    k = length(s);
+    while part(s, k) == "0"
+        k = k - 1;
+    end
+    if part(s, k) == "." then k = k - 1; end
+    s = part(s, 1:k);
+endfunction
+
+`;
+    var SCE_HELP_CAPTURE = String.raw`// ---- guarda cada linha impressa, pra poder desenhá-las junto com o gráfico no PDF ----
+global linhasConsole
+linhasConsole = [];
+function escreve(t)
+    mprintf("%s\n", t);
+    global linhasConsole
+    linhasConsole = [linhasConsole; t];
+endfunction
+
+`;
+    var code = SCE_HEADER + SCE_HELP_BASE + SCE_HELP_BIS;
+    if (state.bisChartOn) code += SCE_HELP_CAPTURE;
+    code += "function y = f(x)\n    y = " + expr + ";\nendfunction\n\n";
+    code += "a = " + fmtScilab(state.bisA) + ";\n";
+    code += "b = " + fmtScilab(state.bisB) + ";\n";
+    if (tolMode){
+      code += "tol = " + fmtScilab(state.bisTolerance) + "; // tolerância: para quando E_k < tol\n";
+      code += "maxIter = " + MAX_ITER + "; // limite de iterações\n\n";
+    } else {
+      code += "maxIter = " + state.bisNumIter + "; // número de iterações (gera as iterações de 0 até maxIter)\n\n";
+    }
+    code += sceCabecalho();
+    code += sceEscreve("f(x) = " + state.bisFunction);
+    code += sceEscreve("Intervalo inicial: [" + fmtScilab(state.bisA) + ", " + fmtScilab(state.bisB) + "]");
+    code += sceEscreve("Critério: " + (tolMode ? "tolerância E_k < " + fmtScilab(state.bisTolerance) : state.bisNumIter + " iterações (0 até " + state.bisNumIter + ")"));
+    code += "escreve(\"\");\n";
+    code += sceEscreve("// Tabela de iterações");
+    code += String.raw`fa = f(a); fb = f(b);
+K = []; Ak = []; Bk = []; Xk = []; Fxk = []; Ek = [];
+xPrev = %nan;
+convergiu = %f; kConv = -1;
+for k = 0:maxIter
+    x = (a + b) / 2;
+    fx = f(x);
+    if isnan(xPrev) then
+        e = %nan;
+    else
+        e = abs(x - xPrev) / abs(x);
+    end
+    K = [K, k]; Ak = [Ak, a]; Bk = [Bk, b]; Xk = [Xk, x]; Fxk = [Fxk, fx]; Ek = [Ek, e];
+    if fx == 0 then
+        convergiu = %t; kConv = k; break;
+    end
+`;
+    if (tolMode) code += "    if ~isnan(e) & e < tol then\n        convergiu = %t; kConv = k; break;\n    end\n";
+    code += String.raw`    if fa * fx < 0 then
+        b = x; fb = fx;
+    else
+        a = x; fa = fx;
+    end
+    xPrev = x;
+end
+N = length(K);
+T = emptystr(N+1, 7);
+T(1,1)="k"; T(1,2)="a_k"; T(1,3)="b_k"; T(1,4)="x_k"; T(1,5)="f(x_k)"; T(1,6)="E_k"; T(1,7)="sinal de f(x_k)";
+for i = 1:N
+    T(i+1,1) = string(K(i));
+    T(i+1,2) = fnum8(Ak(i));
+    T(i+1,3) = fnum8(Bk(i));
+    T(i+1,4) = fnum8(Xk(i));
+    T(i+1,5) = fnum8(Fxk(i));
+    if isnan(Ek(i)) then
+        T(i+1,6) = "-";
+    else
+        T(i+1,6) = fnum8(Ek(i));
+    end
+    if Fxk(i) == 0 then
+        T(i+1,7) = "zero";
+    elseif Fxk(i) < 0 then
+        T(i+1,7) = "negativo";
+    else
+        T(i+1,7) = "positivo";
+    end
+end
+w = zeros(1,7);
+for c = 1:7
+    w(c) = max(length(T(:,c)));
+end
+`;
+    if (state.bisChartOn) code += "inicioTabela = size(linhasConsole,1) + 1; // marca onde a tabela começa, pra desenhar só ela em negrito no PDF\n";
+    code += String.raw`for r = 1:N+1
+    t = "";
+    for c = 1:7
+        if c == 1 then
+            t = t + T(r,c) + blanks(w(c)-length(T(r,c)));
+        else
+            t = t + "   " + blanks(w(c)-length(T(r,c))) + T(r,c);
+        end
+    end
+    escreve(t);
+end
+`;
+    if (state.bisChartOn) code += "fimTabela = size(linhasConsole,1); // marca onde a tabela termina\n";
+    code += String.raw`escreve("");
+escreve(msprintf("// Raiz aproximada: %s", fnum8(Xk(N))));
+escreve(msprintf("// f(x) = %s", fnum8(Fxk(N))));
+if convergiu then
+    escreve(msprintf("// Critério atingido na iteração %d.", kConv));
+end
+`;
+    if (state.bisChartOn){
+      code += "\nescreve(\"\");\n";
+      code += sceEscreve("// Gráfico da função e pontos da bisseção");
+      code += String.raw`span = max(Bk(1) - Ak(1), 1e-9);
+xmin = min([Xk, Ak(1), Bk(1)]) - span*0.12;
+xmax = max([Xk, Ak(1), Bk(1)]) + span*0.12;
+xs = linspace(xmin, xmax, 400);
+ys = zeros(xs);
+for i = 1:length(xs)
+    ys(i) = f(xs(i));
+end
+
+// --- monta uma única página, no tamanho padrão A4 (retrato), texto em cima e gráfico embaixo ---
+figPdf = gcf();
+clf(figPdf);
+figPdf.figure_size = [595, 842]; // A4 (210 x 297 mm) em pontos PDF — tamanho reconhecido como A4 de verdade
+
+nLin = size(linhasConsole, 1);
+
+// área de texto (topo)
+axTexto = newaxes();
+axTexto.axes_bounds = [0.02, 0.02, 0.96, 0.56];
+axTexto.axes_visible = ["off","off","off"];
+axTexto.data_bounds = [0, 0; 1, 1];
+yTopo = 0.97;
+passoY = 0.97 / max(nLin, 1);
+for i = 1:nLin
+    h = xstring(0.01, yTopo - (i-1)*passoY, linhasConsole(i));
+    if i >= inicioTabela & i <= fimTabela then
+        h.font_size = 0; // tabela: fonte um pouco menor, pra não estourar a largura da página A4
+        h.font_style = 0; // Courier Bold só na tabela
+    else
+        h.font_size = 1;
+        h.font_style = 2; // Courier normal no resto do texto
+    end
+end
+
+// área do gráfico (embaixo)
+axGrafico = newaxes();
+axGrafico.axes_bounds = [0.08, 0.62, 0.88, 0.34];
+plot(xs, ys, 'k-');
+plot([Ak(1) Bk(1)], [f(Ak(1)) f(Bk(1))], 'ro');
+plot(Xk, Fxk, 'gs');
+plot(Xk($), Fxk($), 'md');
+xtitle("Bisseção - f(x)", "x", "f(x)");
+legend(["f(x)", "extremos do intervalo", "pontos médios", "raiz aproximada"]);
+
+// --- exporta a página combinada em PDF, direto na pasta Downloads ---
+if getos() == "Windows" then
+    pastaBase = getenv("USERPROFILE");
+else
+    pastaBase = getenv("HOME");
+end
+pastaDownloads = fullfile(pastaBase, "Downloads");
+if ~isdir(pastaDownloads) then
+    mkdir(pastaDownloads);
+end
+nomeArqGrafico = fullfile(pastaDownloads, "bissecao-grafico");
+xs2pdf(figPdf, nomeArqGrafico);
+escreve("");
+escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
+`;
+    }
+    return code;
+  }
+
   function buildScilabCode(){
     if (!lastComputation) return "";
+    if (state.method === "bissecao") return buildScilabCodeBissecao();
     if (state.method === "gauss") return buildScilabCodeGauss();
     if (state.method === "lu") return buildScilabCodeLu();
     if (state.method === "seidel") return buildScilabCodeSeidel();
@@ -3661,7 +4556,7 @@ end
   });
 
   document.getElementById("btnScilabDownload").addEventListener("click", async function(){
-    var nomeMetodo = state.method === "gauss" ? "gauss-jordan" : state.method === "lu" ? "fatoracao-lu" : state.method === "seidel" ? "gauss-seidel" : "jacobi";
+    var nomeMetodo = state.method === "bissecao" ? "bissecao" : state.method === "gauss" ? "gauss-jordan" : state.method === "lu" ? "fatoracao-lu" : state.method === "seidel" ? "gauss-seidel" : "jacobi";
     var filename = nomeMetodo + ".sce";
     var blob = new Blob([scilabCodeAreaEl.value], {type:"text/plain"});
     try{
@@ -3887,7 +4782,10 @@ end
     });
     document.querySelector('input[name="method"][value="'+state.method+'"]').checked = true;
     document.getElementById("jacobiParams").style.display = (state.method === "jacobi" || state.method === "seidel") ? "flex" : "none";
+    document.getElementById("bisectionParams").style.display = state.method === "bissecao" ? "flex" : "none";
     document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
+    document.getElementById("colsField").style.display = state.method === "bissecao" ? "none" : "flex";
+    document.getElementById("dimsPanel").classList.toggle("dims-full", state.method === "bissecao");
     syncDimsHint(state.method);
     document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("rowsVal").textContent = state.rows;
@@ -3904,8 +4802,16 @@ end
     headerNameEl.value = state.headerName || "";
     headerQuestionEl.value = state.headerQuestion || "";
     chkScilabChartEl.checked = !!state.scilabChartOn;
+    chkBisChartEl.checked = !!state.bisChartOn;
     chkConvEl.checked = !!state.checkConv;
     chkEncurtarEl.checked = !!state.encurtar;
+    document.getElementById("bisFunction").value = state.bisFunction || "";
+    document.getElementById("bisA").value = state.bisA !== undefined ? state.bisA : 2;
+    document.getElementById("bisB").value = state.bisB !== undefined ? state.bisB : 3;
+    document.getElementById("bisNumIter").value = state.bisNumIter || 5;
+    document.getElementById("bisTolerance").value = state.bisTolerance || 0.001;
+    document.querySelectorAll("input[name='bisStopMode']").forEach(function(r){r.checked=r.value===(state.bisStopMode||"iter");});
+    syncBisControls();
     buildEditor();
     render();
   }
