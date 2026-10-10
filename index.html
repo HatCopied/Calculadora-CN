@@ -516,6 +516,18 @@
       <input type="radio" name="method" value="bissecao">
       <span class="mo-text"><b>Bisseção</b></span>
     </label>
+    <label class="method-opt" data-method="falsapos">
+      <input type="radio" name="method" value="falsapos">
+      <span class="mo-text"><b>Posição Falsa</b></span>
+    </label>
+    <label class="method-opt" data-method="pontofixo">
+      <input type="radio" name="method" value="pontofixo">
+      <span class="mo-text"><b>Ponto Fixo</b></span>
+    </label>
+    <label class="method-opt" data-method="newton">
+      <input type="radio" name="method" value="newton">
+      <span class="mo-text"><b>Newton</b></span>
+    </label>
   </div>
 
   <div class="layout">
@@ -566,22 +578,39 @@
 
             <div id="bisectionParams" class="bisection-config" style="display:none;">
               <div class="function-field">
-                <label for="bisFunction">Função f(x)</label>
+                <label for="bisFunction" id="bisFunctionLabel">Função f(x)</label>
                 <input class="function-input" id="bisFunction" type="text" spellcheck="false"
                   placeholder="ex.: x^3 - 2*x - 5">
                 <div class="hint">Aceita x, +, −, *, /, ^, parênteses e funções como ln(x), sin(x), cos(x), sqrt(x) e e^x.</div>
               </div>
 
-              <div class="interval-grid">
+              <div class="function-field" id="fieldPhi" style="display:none;">
+                <label for="rootPhi">Função de iteração φ(x)</label>
+                <input class="function-input" id="rootPhi" type="text" spellcheck="false" placeholder="ex.: x^3/9 + 1/3">
+                <div class="hint">xₖ = φ(xₖ₋₁). Reescreva f(x) = 0 como x = φ(x).</div>
+              </div>
+
+              <div class="function-field" id="fieldDeriv" style="display:none;">
+                <div class="hint" id="derivHint">A derivada f′(x) é calculada automaticamente a partir de f(x).</div>
+              </div>
+
+              <div class="field-row bis-iter-field" id="fieldX0" style="display:none;flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="rootX0">Chute inicial x₀</label>
+                <input type="number" class="param" id="rootX0" step="any" value="2" placeholder="auto" style="width:100%;">
+                <div class="hint" id="x0Hint">Newton: se ficar vazio, o programa usa o ponto médio do intervalo onde f(x) troca de sinal (tabela de valores).</div>
+              </div>
+
+              <div class="interval-grid" id="bisIntervalGrid">
                 <div class="interval-cell">
                   <label for="bisA">A</label>
-                  <input type="number" class="param" id="bisA" step="any" value="2">
+                  <input type="number" class="param" id="bisA" step="any" value="2" placeholder="auto">
                 </div>
                 <div class="interval-cell">
                   <label for="bisB">B</label>
-                  <input type="number" class="param" id="bisB" step="any" value="3">
+                  <input type="number" class="param" id="bisB" step="any" value="3" placeholder="auto">
                 </div>
               </div>
+              <div class="hint" id="intervalHint" style="margin:-4px 0 10px;">Deixe A e B vazios para o programa montar a tabela de valores e achar o intervalo.</div>
 
               <div class="field-row bis-stopmode-field" style="flex-direction:column;align-items:stretch;gap:6px;">
                 <label>Critério de parada</label>
@@ -715,14 +744,14 @@
 <div class="modal-overlay bis-graph-modal" id="bisGraphModal">
   <div class="modal-box">
     <div class="modal-head">
-      <h3>Gráfico — Método da Bisseção</h3>
+      <h3 id="bisGraphTitle">Gráfico — Método da Bisseção</h3>
       <button class="modal-close" id="bisGraphClose" type="button" aria-label="fechar">×</button>
     </div>
     <div class="modal-body">
       <div class="bis-graph-wrap">
         <svg id="bisGraphSvg" viewBox="0 0 900 560" preserveAspectRatio="none" aria-label="Gráfico da função e das iterações da bisseção"></svg>
       </div>
-      <div class="bis-legend">
+      <div class="bis-legend" id="bisLegend">
         <span><i class="bis-line" style="background:var(--ink-soft)"></i> f(x)</span>
         <span><i class="bis-dot" style="background:var(--danger)"></i> extremos do intervalo</span>
         <span><i class="bis-dot" style="background:var(--teal)"></i> pontos médios</span>
@@ -785,6 +814,7 @@
     inicio: 0, numIter: 10, stopMode: "iter", tolerance: 0.001,
     bisFunction: "x^3 - 2*x - 5", bisA: 2, bisB: 3, bisNumIter: 5,
     bisStopMode: "iter", bisTolerance: 0.001, bisChartOn: false,
+    rootPhi: "(2*x+5)^(1/3)", rootX0: 2, rootDeriv: "",
     headerOn: false, headerName: "", headerQuestion: "",
     scilabChartOn: false,
     checkConv: false,
@@ -1124,7 +1154,8 @@
       .replace(/\bfloor\s*\(/gi, "Math.floor(")
       .replace(/\bround\s*\(/gi, "Math.round(")
       .replace(/\bsign\s*\(/gi, "Math.sign(")
-      .replace(/\^/g, "**");
+      .replace(/\^/g, "**")
+      .replace(/Math\.Math\./g, "Math.");
 
     // Permite escrever, por exemplo, ln(x), ln x, sen(x), sen x, cos(x), cos x.
     // As versões sem parênteses recebem um único argumento simples.
@@ -1141,6 +1172,7 @@
     // Multiplicação implícita: 2x, 2(x), x(x), 3sen(x), 2π, 2e.
     src = src.replace(/(\d|\)|x)\s*(?=x|\()/gi, "$1*")
              .replace(/(Math\.PI|Math\.E|\))\s*(?=x|Math\.)/g, "$1*");
+    src = src.replace(/Math\.log10\*\(/g, "Math.log10(");
 
     // Fecha as funções cot/sec/csc que foram convertidas para 1/f(...).
     // Ex.: cot(x) -> (1/Math.tan(x)).
@@ -1163,14 +1195,15 @@
     };
   }
 
-  function bisectionRun(expr, a0, b0, stopMode, numIter, tolerance){
+  function bisectionRun(expr, a0, b0, stopMode, numIter, tolerance, kind){
+    kind = kind || "bissecao";
     var f = makeFunction(expr);
     var a = Number(a0), b = Number(b0);
     if (!isFinite(a) || !isFinite(b) || a >= b) throw new Error("O intervalo precisa ter a < b.");
     var fa = f(a), fb = f(b);
     if (!isFinite(fa) || !isFinite(fb)) throw new Error("A função não é definida em uma das extremidades.");
-    if (fa === 0) return {iterations:[{k:0,a:a,b:b,x:a,fx:0,error:null,sign:"zero",fa:fa,fb:fb}], root:a, rootFx:0, convergedAt:0, f:f};
-    if (fb === 0) return {iterations:[{k:0,a:a,b:b,x:b,fx:0,error:null,sign:"zero",fa:fa,fb:fb}], root:b, rootFx:0, convergedAt:0, f:f};
+    if (fa === 0) return {iterations:[{k:0,a:a,b:b,x:a,fx:0,error:null,sign:"zero",fa:fa,fb:fb}], root:a, rootFx:0, convergedAt:0, f:f, kind:kind};
+    if (fb === 0) return {iterations:[{k:0,a:a,b:b,x:b,fx:0,error:null,sign:"zero",fa:fa,fb:fb}], root:b, rootFx:0, convergedAt:0, f:f, kind:kind};
     if (fa * fb > 0) throw new Error("O intervalo inicial não isola uma raiz: f(a)·f(b) precisa ser < 0.");
 
     var rows = [];
@@ -1178,7 +1211,7 @@
     // as iterações 0, 1, 2, ..., N (ou seja, N+1 linhas na tabela).
     var xPrev = null, convergedAt = null, max = stopMode === "tol" ? MAX_ITER : Math.max(1, numIter) + 1;
     for (var k=0; k<max; k++){
-      var x = (a+b)/2, fx = f(x);
+      var x = kind === "falsapos" ? (a*fb - b*fa)/(fb - fa) : (a+b)/2, fx = f(x);
       var err = xPrev === null ? null : (Math.abs(x-xPrev) / Math.abs(x));
       var sign = fx === 0 ? "zero" : (fx < 0 ? "neg" : "pos");
       rows.push({k:k,a:a,b:b,x:x,fx:fx,error:err,sign:sign,fa:fa,fb:fb});
@@ -1192,7 +1225,7 @@
       xPrev=x;
     }
     var last=rows[rows.length-1];
-    return {iterations:rows, root:last.x, rootFx:last.fx, convergedAt:convergedAt, f:f};
+    return {iterations:rows, root:last.x, rootFx:last.fx, convergedAt:convergedAt, f:f, kind:kind};
   }
 
   function bisFmt(x){
@@ -1238,125 +1271,765 @@
     return s;
   }
 
-  function renderBisection(run){
-    var body=document.getElementById("stepsBody");
-    body.innerHTML="";
-    var sum=document.createElement("div"); sum.className="bis-summary";
-    var stats=[
-      ["Raiz aproximada",bisFmt(run.root)],
-      ["f(x)",bisFmt(run.rootFx)],
-      ["Iterações",String(run.iterations.length)],
-      ["Critério",state.bisStopMode==="tol" ? "Eₖ < "+bisFmt(state.bisTolerance) : state.bisNumIter+" iterações"]
-    ];
-    stats.forEach(function(v){
-      var d=document.createElement("div"); d.className="bis-stat";
-      d.innerHTML="<small>"+v[0]+"</small><strong>"+v[1]+"</strong>"; sum.appendChild(d);
-    });
-    body.appendChild(sum);
-
-    var note=document.createElement("div"); note.className="hint"; note.style.margin="0 0 9px";
-    note.textContent="Eₖ = |xₖ − xₖ₋₁| / |xₖ|. Para k = 0, o erro não é definido.";
-    body.appendChild(note);
-
-    var wrap=document.createElement("div"); wrap.className="bis-table-wrap";
-    var t=document.createElement("table"); t.className="bis-table-grid";
-    var headers=["k","aₖ","bₖ","xₖ","f(xₖ)","Eₖ","sinal de f(xₖ)"];
-    var tr=document.createElement("tr");
-    headers.forEach(function(h){var th=document.createElement("th");th.textContent=h;tr.appendChild(th);});
-    t.appendChild(tr);
-    run.iterations.forEach(function(it){
-      var r=document.createElement("tr");
-      var vals=[it.k,bisFmt(it.a),bisFmt(it.b),bisFmt(it.x),bisFmt(it.fx),bisErrorText(it.error),
-                it.sign==="neg"?"negativo":it.sign==="pos"?"positivo":"zero"];
-      vals.forEach(function(v,c){
-        var td=document.createElement("td"); td.textContent=v;
-        if(c===6) td.className=it.sign==="neg"?"bis-sign-neg":it.sign==="pos"?"bis-sign-pos":"bis-sign-pos";
-        r.appendChild(td);
-      });
-      t.appendChild(r);
-    });
-    wrap.appendChild(t); body.appendChild(wrap);
-
-    var final=document.createElement("div"); final.className="final-box";
-    var h=document.createElement("h3"); h.textContent=run.convergedAt!==null ? "Critério atingido" : "Limite de iterações atingido";
-    final.appendChild(h);
-    var p=document.createElement("div"); p.style.fontSize="12.5px";
-    p.textContent=run.convergedAt!==null
-      ? (state.bisStopMode==="tol" ? "A tolerância foi satisfeita na iteração "+run.convergedAt+"." : "A raiz foi aproximada após "+run.iterations.length+" iterações.")
-      : (state.bisStopMode==="tol"
-          ? "A tolerância não foi atingida dentro do limite de "+MAX_ITER+" iterações."
-          : "O número de iterações definido ("+state.bisNumIter+") foi atingido sem que f(xₖ) chegasse a zero.");
-    final.appendChild(p); body.appendChild(final);
-  }
-
   function renderBisectionTableOnly(run){
     renderBisection(run);
     document.getElementById("stepsBody").scrollIntoView({behavior:"smooth",block:"start"});
   }
 
+  // ======================================================================
+  // Raízes de f(x) = 0: Bisseção, Posição Falsa, Ponto Fixo e Newton
+  // (os campos função / A / B / critério de parada são compartilhados)
+  // ======================================================================
+  function isRoot(m){ return m==="bissecao" || m==="falsapos" || m==="pontofixo" || m==="newton"; }
+  function rootIsInterval(m){ return m==="bissecao" || m==="falsapos"; }
+  function metodoSlug(m){
+    return ({gauss:"escalonamento", lu:"fatoracao-lu", seidel:"gauss-seidel", jacobi:"jacobi",
+             bissecao:"bissecao", falsapos:"posicao-falsa", pontofixo:"ponto-fixo", newton:"newton"})[m] || "jacobi";
+  }
+
+  // ---------- Derivada simbólica automática (para o método de Newton) ----------
+  // Lê a f(x) digitada (mesma sintaxe da calculadora), deriva e devolve o texto de f'(x).
+  // Se algo não for reconhecido, devolve "" e o Newton cai na derivada numérica.
+  var Dv = (function(){
+    var N = function(v){ return {t:"num", v:v}; };
+    var isNum = function(n, v){ return n.t === "num" && (v === undefined || n.v === v); };
+    function hasX(n){
+      if (n.t === "x") return true;
+      if (n.t === "num" || n.t === "c") return false;
+      if (n.t === "fn" || n.t === "neg") return hasX(n.a);
+      return hasX(n.a) || hasX(n.b);
+    }
+    function neg(a){
+      if (isNum(a)) return N(-a.v);
+      if (a.t === "neg") return a.a;
+      return {t:"neg", a:a};
+    }
+    function add(a, b){
+      if (isNum(a,0)) return b;
+      if (isNum(b,0)) return a;
+      if (isNum(a) && isNum(b)) return N(a.v + b.v);
+      return {t:"add", a:a, b:b};
+    }
+    function mul(a, b){
+      if (isNum(a,0) || isNum(b,0)) return N(0);
+      if (isNum(a,1)) return b;
+      if (isNum(b,1)) return a;
+      if (a.t === "neg") return neg(mul(a.a, b));
+      if (b.t === "neg") return neg(mul(a, b.a));
+      if (isNum(a) && a.v < 0) return neg(mul(N(-a.v), b));
+      if (isNum(b) && b.v < 0) return neg(mul(a, N(-b.v)));
+      if (isNum(a) && isNum(b)) return N(a.v * b.v);
+      if (isNum(b) && !isNum(a)){ var t = a; a = b; b = t; }
+      if (isNum(a) && b.t === "mul" && isNum(b.a)) return mul(N(a.v * b.a.v), b.b);
+      return {t:"mul", a:a, b:b};
+    }
+    function div(a, b){
+      if (isNum(a,0)) return N(0);
+      if (isNum(b,1)) return a;
+      if (a.t === "neg") return neg(div(a.a, b));
+      if (b.t === "neg") return neg(div(a, b.a));
+      if (isNum(a) && a.v < 0) return neg(div(N(-a.v), b));
+      if (isNum(a) && isNum(b) && b.v !== 0 && Number.isInteger(a.v / b.v)) return N(a.v / b.v);
+      return {t:"div", a:a, b:b};
+    }
+    function pow(a, b){
+      if (isNum(b,0)) return N(1);
+      if (isNum(b,1)) return a;
+      if (isNum(a) && isNum(b)){ var r = Math.pow(a.v, b.v); if (isFinite(r) && Number.isInteger(r)) return N(r); }
+      return {t:"pow", a:a, b:b};
+    }
+    function fn(n, a){ return {t:"fn", n:n, a:a}; }
+
+    var FN = {
+      sen:"sin", sin:"sin", cos:"cos", tg:"tan", tan:"tan", ln:"ln", log:"log10", log10:"log10",
+      sqrt:"sqrt", raiz:"sqrt", exp:"exp", abs:"abs",
+      asen:"asin", asin:"asin", arcsen:"asin", arcsin:"asin", acos:"acos", arccos:"acos",
+      atg:"atan", atan:"atan", arctg:"atan", arctan:"atan"
+    };
+
+    function tokenize(s){
+      s = String(s).toLowerCase().replace(/−/g,"-").replace(/[×·]/g,"*").replace(/÷/g,"/").replace(/\*\*/g,"^").replace(/,/g,".");
+      var toks = [], i = 0, m;
+      while (i < s.length){
+        var c = s[i];
+        if (/\s/.test(c)){ i++; continue; }
+        if ((m = /^(\d+(?:\.\d*)?|\.\d+)/.exec(s.slice(i)))){ toks.push({k:"num", v:parseFloat(m[1])}); i += m[1].length; continue; }
+        if (c === "π"){ toks.push({k:"c", v:"pi"}); i++; continue; }
+        if ((m = /^[a-z]+\d*/.exec(s.slice(i)))){
+          var w = m[0];
+          if (w === "x") toks.push({k:"x"});
+          else if (w === "e" || w === "pi") toks.push({k:"c", v:w});
+          else if (FN[w]) toks.push({k:"fn", v:FN[w]});
+          else throw new Error("nome desconhecido: " + w);
+          i += w.length; continue;
+        }
+        if ("+-*/^()".indexOf(c) >= 0){ toks.push({k:c}); i++; continue; }
+        throw new Error("caractere desconhecido: " + c);
+      }
+      return toks;
+    }
+
+    function parse(s){
+      var T = tokenize(s), p = 0;
+      function peek(){ return T[p] ? T[p].k : null; }
+      function startsPrimary(){ var k = peek(); return k === "num" || k === "x" || k === "c" || k === "fn" || k === "("; }
+      function expr(){
+        var a = term();
+        while (peek() === "+" || peek() === "-"){
+          var op = T[p++].k, b = term();
+          a = {t:"add", a:a, b: op === "-" ? {t:"neg", a:b} : b};
+        }
+        return a;
+      }
+      function term(){
+        var a = unary();
+        for (;;){
+          var k = peek();
+          if (k === "*"){ p++; a = {t:"mul", a:a, b:unary()}; }
+          else if (k === "/"){ p++; a = {t:"div", a:a, b:unary()}; }
+          else if (startsPrimary()){ a = {t:"mul", a:a, b:unary()}; }
+          else break;
+        }
+        return a;
+      }
+      function unary(){
+        if (peek() === "-"){ p++; return {t:"neg", a:unary()}; }
+        if (peek() === "+"){ p++; return unary(); }
+        return power();
+      }
+      function power(){
+        var a = primary();
+        if (peek() === "^"){ p++; return {t:"pow", a:a, b:unary()}; }
+        return a;
+      }
+      function primary(){
+        var tk = T[p];
+        if (!tk) throw new Error("expressão incompleta");
+        if (tk.k === "num"){ p++; return N(tk.v); }
+        if (tk.k === "x"){ p++; return {t:"x"}; }
+        if (tk.k === "c"){ p++; return {t:"c", n:tk.v}; }
+        if (tk.k === "("){
+          p++; var e = expr();
+          if (peek() !== ")") throw new Error("faltou fechar parêntese");
+          p++; return e;
+        }
+        if (tk.k === "fn"){
+          p++;
+          if (peek() === "("){
+            p++; var a = expr();
+            if (peek() !== ")") throw new Error("faltou fechar parêntese");
+            p++; return fn(tk.v, a);
+          }
+          return fn(tk.v, power());
+        }
+        throw new Error("símbolo inesperado");
+      }
+      var r = expr();
+      if (p < T.length) throw new Error("sobrou texto na expressão");
+      return r;
+    }
+
+    // reconstrói a árvore passando pelos construtores que simplificam (0, 1, produtos de números...)
+    function simp(n){
+      switch (n.t){
+        case "num": case "x": case "c": return n;
+        case "neg": return neg(simp(n.a));
+        case "add": return add(simp(n.a), simp(n.b));
+        case "mul": return mul(simp(n.a), simp(n.b));
+        case "div": return div(simp(n.a), simp(n.b));
+        case "pow": return pow(simp(n.a), simp(n.b));
+        case "fn": return fn(n.n, simp(n.a));
+      }
+    }
+
+    function d(n){
+      switch (n.t){
+        case "num": case "c": return N(0);
+        case "x": return N(1);
+        case "neg": return neg(d(n.a));
+        case "add": return add(d(n.a), d(n.b));
+        case "mul": return add(mul(d(n.a), n.b), mul(n.a, d(n.b)));
+        case "div": return div(add(mul(d(n.a), n.b), neg(mul(n.a, d(n.b)))), pow(n.b, N(2)));
+        case "pow": {
+          var a = n.a, b = n.b, da = d(a), db = d(b);
+          if (!hasX(b)){
+            if (isNum(b)) return mul(mul(b, pow(a, N(b.v - 1))), da);
+            return mul(mul(b, pow(a, add(b, N(-1)))), da);
+          }
+          var lna = (a.t === "c" && a.n === "e") ? N(1) : fn("ln", a);
+          if (!hasX(a)) return mul(mul(db, lna), n);
+          return mul(n, add(mul(db, fn("ln", a)), div(mul(b, da), a)));
+        }
+        case "fn": {
+          var u = n.a, du = d(u);
+          switch (n.n){
+            case "sin":   return mul(du, fn("cos", u));
+            case "cos":   return neg(mul(du, fn("sin", u)));
+            case "tan":   return div(du, pow(fn("cos", u), N(2)));
+            case "ln":    return div(du, u);
+            case "log10": return div(du, mul(u, fn("ln", N(10))));
+            case "sqrt":  return div(du, mul(N(2), fn("sqrt", u)));
+            case "exp":   return mul(du, n);
+            case "abs":   return mul(du, div(u, n));
+            case "asin":  return div(du, fn("sqrt", add(N(1), neg(pow(u, N(2))))));
+            case "acos":  return neg(div(du, fn("sqrt", add(N(1), neg(pow(u, N(2)))))));
+            case "atan":  return div(du, add(N(1), pow(u, N(2))));
+          }
+        }
+      }
+      throw new Error("função não suportada");
+    }
+
+    function numStr(v){ return String(parseFloat(v.toPrecision(12))); }
+    var FNAME = {sin:"sin", cos:"cos", tan:"tan", ln:"ln", log10:"log10", sqrt:"sqrt", exp:"exp", abs:"abs", asin:"asin", acos:"acos", atan:"atan"};
+    // prec: 1 soma, 2 produto/divisão, 3 potência, 4 átomo
+    function pr(n, min){
+      var s, q;
+      switch (n.t){
+        case "num": s = numStr(Math.abs(n.v)); q = n.v < 0 ? 1.5 : 4; if (n.v < 0) s = "-" + s; break;
+        case "x": s = "x"; q = 4; break;
+        case "c": s = n.n; q = 4; break;
+        case "fn": s = FNAME[n.n] + "(" + pr(n.a, 0) + ")"; q = 4; break;
+        case "neg": s = "-" + pr(n.a, 2); q = 1.5; break;
+        case "add":
+          if (n.b.t === "neg") s = pr(n.a, 1) + " - " + pr(n.b.a, 2);
+          else if (n.b.t === "num" && n.b.v < 0) s = pr(n.a, 1) + " - " + numStr(-n.b.v);
+          else s = pr(n.a, 1) + " + " + pr(n.b, 1);
+          q = 1; break;
+        case "mul": s = pr(n.a, 2) + "*" + pr(n.b, 2.5); q = 2; break;
+        case "div": s = pr(n.a, 2) + "/" + pr(n.b, 3); q = 2; break;
+        case "pow": s = pr(n.a, 4) + "^" + pr(n.b, 4); q = 3; break;
+      }
+      return q < min ? "(" + s + ")" : s;
+    }
+
+    function derivText(expr){
+      try{
+        if (!String(expr || "").trim()) return "";
+        var tree = simp(parse(expr));
+        if (!hasX(tree)) return "0";
+        return pr(d(tree), 0);
+      }catch(e){ return ""; }
+    }
+    return {derivText: derivText};
+  })();
+
+  // f'(x) que será usada: a digitada pelo usuário ou, se vazia, a calculada automaticamente
+  function autoDerivative(st){ return Dv.derivText(st.bisFunction); }
+  function effectiveDeriv(st){
+    return autoDerivative(st);
+  }
+
+  // ---------- Intervalo [A, B] automático (tabela de valores) ----------
+  // Se A e B ficarem vazios, varre x de -10 a 10 (passo 1; se não achar, refina:
+  // 0,5 / 0,25 / 0,1 / 0,05 / 0,01), monta a tabela de f(x) e pega a troca de sinal
+  // mais próxima de x = 0. Pontos onde f(x) não existe (ex.: ln(x) com x ≤ 0) são ignorados.
+  function ivBlank(v){ return v === null || v === undefined || v === "" || (typeof v === "number" && isNaN(v)); }
+  function findIntervalTable(expr){
+    var f = makeFunction(expr), LIM = 10, steps = [1, 0.5, 0.25, 0.1, 0.05, 0.01];
+    for (var si = 0; si < steps.length; si++){
+      var s = steps[si], n = Math.round(LIM / s), pts = [];
+      for (var i = -n; i <= n; i++){ var x = parseFloat((i * s).toFixed(10)); pts.push({x:x, fx:f(x)}); }
+      var best = -1, bestDist = Infinity;
+      for (var j = 0; j < pts.length - 1; j++){
+        var p = pts[j], q = pts[j+1];
+        if (!isFinite(p.fx) || !isFinite(q.fx)) continue;
+        if (p.fx * q.fx > 0 || (p.fx === 0 && q.fx === 0)) continue;
+        var dist = Math.abs((p.x + q.x) / 2);
+        if (dist < bestDist){ bestDist = dist; best = j; }
+      }
+      if (best >= 0){
+        var lo = Math.max(0, best - 2), hi = Math.min(pts.length - 1, best + 3);
+        var table = pts.slice(lo, hi + 1).filter(function(r){ return isFinite(r.fx); });
+        return {a:pts[best].x, b:pts[best+1].x, step:s, table:table};
+      }
+    }
+    throw new Error("Não encontrei troca de sinal de f(x) entre −10 e 10. Informe A e B manualmente.");
+  }
+  function resolveInterval(st){
+    var ba = ivBlank(st.bisA), bb = ivBlank(st.bisB);
+    if (ba && bb){
+      var info = findIntervalTable(st.bisFunction);
+      return {a:info.a, b:info.b, auto:true, info:info};
+    }
+    if (ba || bb) throw new Error("Preencha A e B, ou deixe os dois vazios para o programa achar o intervalo.");
+    return {a:Number(st.bisA), b:Number(st.bisB), auto:false};
+  }
+  // chute inicial x0: se ficar vazio no Newton, usa o ponto médio do intervalo onde f troca de sinal
+  function resolveX0(st){
+    if (ivBlank(st.rootX0)){
+      if (st.method !== "newton") throw new Error("Informe um valor inicial x₀.");
+      var info = findIntervalTable(st.bisFunction);
+      return {x0:(info.a + info.b) / 2, auto:true, info:info};
+    }
+    return {x0:Number(st.rootX0), auto:false};
+  }
+  function ivTableLines(iv){
+    var L = [];
+    if (iv && iv.auto){
+      L.push("Tabela de valores de f(x):");
+      iv.info.table.forEach(function(r){ L.push("  x = " + bisFmt(r.x) + "    f(x) = " + bisFmt(r.fx)); });
+    }
+    return L;
+  }
+
+  function rootRunFor(st){
+    var m = st.method;
+    if (m === "bissecao" || m === "falsapos")
+      return (function(){
+        var iv = resolveInterval(st);
+        var r = bisectionRun(st.bisFunction, iv.a, iv.b, st.bisStopMode, st.bisNumIter, st.bisTolerance, m);
+        r.interval = iv; return r;
+      })();
+    if (m === "pontofixo")
+      return fixedPointRun(st.bisFunction, st.rootPhi, resolveX0(st).x0, st.bisStopMode, st.bisNumIter, st.bisTolerance);
+    var xr = resolveX0(st);
+    var rn = newtonRun(st.bisFunction, effectiveDeriv(st), xr.x0, st.bisStopMode, st.bisNumIter, st.bisTolerance);
+    if (xr.auto) rn.interval = {auto:true, a:xr.info.a, b:xr.info.b, info:xr.info, x0:xr.x0};
+    return rn;
+  }
+
+  // Ponto fixo: x_k = φ(x_{k-1}). A linha k = 0 é o chute inicial.
+  // f(x) é opcional (só serve pra coluna f(x_k)).
+  function fixedPointRun(fExpr, phiExpr, x0, stopMode, numIter, tolerance){
+    if (!String(phiExpr || "").trim()) throw new Error("Digite a função de iteração φ(x).");
+    var phi = makeFunction(phiExpr);
+    var hasF = String(fExpr || "").trim() !== "";
+    var f = hasF ? makeFunction(fExpr) : function(){ return NaN; };
+    var x = Number(x0);
+    if (!isFinite(x)) throw new Error("Informe um valor inicial x₀.");
+    var p = phi(x);
+    if (!isFinite(p)) throw new Error("φ(x) não é definida em x₀.");
+    var rows = [{k:0, x:x, phix:p, error:null, fx:f(x)}];
+    var max = stopMode === "tol" ? MAX_ITER : Math.max(1, numIter);
+    var convergedAt = null, stopReason = null;
+    for (var k=1; k<=max; k++){
+      var xn = rows[k-1].phix;
+      var err = Math.abs(xn) > 0 ? Math.abs(xn - x) / Math.abs(xn) : Math.abs(xn - x);
+      var pn = phi(xn), fxn = f(xn);
+      rows.push({k:k, x:xn, phix:pn, error:err, fx:fxn});
+      x = xn;
+      if (!isFinite(pn)){ stopReason = "phi(x_k) deixou de ser um número real finito (a sequência diverge ou saiu do domínio de phi)."; break; }
+      if (hasF && fxn === 0){ convergedAt = k; break; }
+      if (stopMode === "tol" && err < tolerance){ convergedAt = k; break; }
+    }
+    var last = rows[rows.length-1];
+    return {kind:"pontofixo", iterations:rows, root:last.x, rootFx:last.fx, convergedAt:convergedAt,
+            f:f, phi:phi, hasF:hasF, stopReason:stopReason};
+  }
+
+  // Newton: x_k = x_{k-1} − f(x_{k-1}) / f′(x_{k-1}). Sem f′ digitada, usa derivada numérica.
+  function newtonRun(fExpr, dExpr, x0, stopMode, numIter, tolerance){
+    var f = makeFunction(fExpr);
+    var hasD = String(dExpr || "").trim() !== "";
+    var df = hasD ? makeFunction(dExpr) : function(x){
+      var h = 1e-6 * Math.max(1, Math.abs(x));
+      return (f(x + h) - f(x - h)) / (2*h);
+    };
+    var x = Number(x0);
+    if (!isFinite(x)) throw new Error("Informe um valor inicial x₀.");
+    var rows = [], xPrev = null, convergedAt = null, stopReason = null;
+    var max = stopMode === "tol" ? MAX_ITER : Math.max(1, numIter);
+    for (var k=0; k<=max; k++){
+      var fx = f(x), dfx = df(x);
+      if (!isFinite(fx)){
+        if (k === 0) throw new Error("f(x) não é definida em x₀.");
+        stopReason = "f(x_k) não é definida em x_k."; break;
+      }
+      var err = xPrev === null ? null : (Math.abs(x) > 0 ? Math.abs(x - xPrev) / Math.abs(x) : Math.abs(x - xPrev));
+      rows.push({k:k, x:x, error:err, fx:fx, dfx:dfx});
+      if (fx === 0){ convergedAt = k; break; }
+      if (stopMode === "tol" && err !== null && err < tolerance){ convergedAt = k; break; }
+      if (k === max) break;
+      if (!isFinite(dfx) || dfx === 0){ stopReason = "f'(x_k) = 0 (ou indefinida): o método não pode continuar."; break; }
+      xPrev = x; x = x - fx/dfx;
+      if (!isFinite(x)){ stopReason = "x_k deixou de ser finito (divergência)."; break; }
+    }
+    var last = rows[rows.length-1];
+    return {kind:"newton", iterations:rows, root:last.x, rootFx:last.fx, convergedAt:convergedAt,
+            f:f, df:df, hasD:hasD, stopReason:stopReason};
+  }
+
+  // tabela de iterações (mesmos dados na tela, no PDF e no texto de "Visualizar")
+  function rootTableData(run, ascii){
+    var kind = run.kind || "bissecao", its = run.iterations, headers, rows;
+    if (kind === "pontofixo"){
+      headers = ascii ? ["k","x_k","phi(x_k)","E_k"] : ["k","xₖ","φ(xₖ)","Eₖ"];
+      if (run.hasF) headers.push(ascii ? "f(x_k)" : "f(xₖ)");
+      rows = its.map(function(it){
+        var r = [String(it.k), bisFmt(it.x), bisFmt(it.phix), bisErrorText(it.error)];
+        if (run.hasF) r.push(bisFmt(it.fx));
+        return r;
+      });
+    } else if (kind === "newton"){
+      headers = ascii ? ["k","x_k","E_k","f(x_k)","f'(x_k)"] : ["k","xₖ","Eₖ","f(xₖ)","f′(xₖ)"];
+      rows = its.map(function(it){
+        return [String(it.k), bisFmt(it.x), bisErrorText(it.error), bisFmt(it.fx), bisFmt(it.dfx)];
+      });
+    } else {
+      headers = ascii ? ["k","a_k","b_k","x_k","f(x_k)","E_k","sinal de f(x_k)"]
+                      : ["k","aₖ","bₖ","xₖ","f(xₖ)","Eₖ","sinal de f(xₖ)"];
+      rows = its.map(function(it){
+        return [String(it.k), bisFmt(it.a), bisFmt(it.b), bisFmt(it.x), bisFmt(it.fx), bisErrorText(it.error),
+                it.sign === "neg" ? "negativo" : it.sign === "pos" ? "positivo" : "zero"];
+      });
+    }
+    return {headers:headers, rows:rows};
+  }
+
+  // linhas de cabeçalho da questão (PDF, Visualizar e .sce usam as mesmas)
+  function rootHeaderLines(st){
+    var m = st.method, L = [];
+    var stop = st.bisStopMode === "tol" ? "tolerância E_k < " + bisFmt(st.bisTolerance)
+                                         : st.bisNumIter + " iterações (0 até " + st.bisNumIter + ")";
+    if (m === "bissecao" || m === "falsapos"){
+      L.push("f(x) = " + st.bisFunction);
+      var ivh; try{ ivh = resolveInterval(st); }catch(e){ ivh = {a:st.bisA, b:st.bisB, auto:false}; }
+      L.push("Intervalo inicial: [" + bisFmt(ivh.a) + ", " + bisFmt(ivh.b) + "]");
+      ivTableLines(ivh).forEach(function(t){ L.push(t); });
+    } else if (m === "pontofixo"){
+      if (String(st.bisFunction || "").trim()) L.push("f(x) = " + st.bisFunction);
+      L.push("phi(x) = " + st.rootPhi);
+      L.push("x0 = " + bisFmt(Number(st.rootX0)));
+    } else {
+      L.push("f(x) = " + st.bisFunction);
+      var dAuto = autoDerivative(st);
+      L.push("f'(x) = " + (dAuto || "derivada numérica (diferença central)"));
+      var xh; try{ xh = resolveX0(st); }catch(e){ xh = {x0:Number(st.rootX0), auto:false}; }
+      if (xh.auto){
+        L.push("Troca de sinal de f(x) em [" + bisFmt(xh.info.a) + ", " + bisFmt(xh.info.b) + "]");
+        ivTableLines({auto:true, info:xh.info}).forEach(function(t){ L.push(t); });
+      }
+      L.push("x0 = " + bisFmt(xh.x0));
+    }
+    L.push("Critério: " + stop);
+    return L;
+  }
+  function rootSummaryLines(st, run){
+    var L = ["// Raiz aproximada: " + bisFmt(run.root)];
+    if (isFinite(run.rootFx)) L.push("// f(x) = " + bisFmt(run.rootFx));
+    if (run.convergedAt !== null) L.push("// Critério atingido na iteração " + run.convergedAt + ".");
+    if (run.stopReason) L.push("// Atenção: " + run.stopReason);
+    return L;
+  }
+  function rootChartTitle(m){
+    return m === "falsapos" ? "// Gráfico da função, cordas e pontos da posição falsa"
+         : m === "pontofixo" ? "// Gráfico de phi(x), da reta y = x e da teia de aranha"
+         : m === "newton" ? "// Gráfico da função, tangentes e pontos de Newton"
+         : "// Gráfico da função e pontos da bisseção";
+  }
+
+  // ---------- gráfico: um modelo só, desenhado na tela (SVG) e no PDF ----------
+  var GRAPH_RGB = {ink:[35,35,35], danger:[190,65,65], teal:[40,150,150], brass:[190,145,40], soft:[150,150,150], sky:[60,120,180]};
+  var GRAPH_CSS = {ink:"var(--ink)", danger:"var(--danger)", teal:"var(--teal)", brass:"var(--brass)", soft:"var(--ink-faint)", sky:"var(--sky)"};
+
+  function rootGraphModel(run){
+    var kind = run.kind || "bissecao", its = run.iterations, f = run.f, interval = rootIsInterval(kind);
+    // ponto fixo / Newton: com muitas linhas (ou divergência) o gráfico mostra só as primeiras
+    var truncated = !interval && (its.length > 14 || !!run.stopReason);
+    if (truncated) its = its.slice(0, run.stopReason ? Math.min(5, its.length) : 12);
+    var last = its.length - 1, i;
+    var xs = its.map(function(d){ return d.x; });
+    if (interval) xs.push(its[0].a, its[0].b);
+    var lo = Math.min.apply(null, xs), hi = Math.max.apply(null, xs);
+    var span = Math.max(hi - lo, interval ? 1e-9 : 0.25*Math.max(Math.abs(hi), Math.abs(lo), 0.5));
+    var xMin = lo - span*.12, xMax = hi + span*.12;
+    var curves = [], segs = [], pts = [], legend = [];
+
+    curves.push({fn: kind === "pontofixo" ? run.phi : f, color:"ink", width:2.4});
+    if (kind === "pontofixo") curves.push({fn:function(x){ return x; }, color:"soft", dash:true, width:1.4});
+
+    if (kind === "falsapos"){
+      for (i=0; i<its.length && i<8; i++) segs.push([its[i].a, its[i].fa, its[i].b, its[i].fb, "sky"]);
+    } else if (kind === "newton"){
+      for (i=0; i<last && i<8; i++) segs.push([its[i].x, its[i].fx, its[i+1].x, 0, "sky"]);
+    } else if (kind === "pontofixo"){
+      for (i=0; i<last && i<12; i++){
+        var xa = its[i].x, xb = its[i+1].x;
+        segs.push([xa, xa, xa, xb, "sky"]);
+        segs.push([xa, xb, xb, xb, "sky"]);
+      }
+    }
+    if (interval){
+      pts.push({x:its[0].a, y:f(its[0].a), c:"danger", r:5});
+      pts.push({x:its[0].b, y:f(its[0].b), c:"danger", r:5});
+    }
+    its.forEach(function(it, idx){
+      var y = kind === "pontofixo" ? it.x : it.fx;
+      if (isFinite(y)) pts.push({x:it.x, y:y, c: idx === last && !truncated ? "brass" : "teal", r: idx === last && !truncated ? 7 : 4.5});
+    });
+
+    if (kind === "pontofixo"){
+      legend = [{t:"line",c:"ink",l:"φ(x)",a:"phi(x)"},{t:"line",c:"soft",l:"y = x",a:"y = x"},
+                {t:"line",c:"sky",l:"teia de aranha",a:"teia de aranha"},
+                {t:"dot",c:"teal",l:"pontos xₖ",a:"pontos x_k"},{t:"dot",c:"brass",l:"raiz aproximada",a:"raiz aproximada"}];
+    } else if (kind === "newton"){
+      legend = [{t:"line",c:"ink",l:"f(x)",a:"f(x)"},{t:"line",c:"sky",l:"tangentes",a:"tangentes"},
+                {t:"dot",c:"teal",l:"pontos xₖ",a:"pontos x_k"},{t:"dot",c:"brass",l:"raiz aproximada",a:"raiz aproximada"}];
+    } else {
+      var midL = kind === "falsapos" ? "pontos xₖ" : "pontos médios";
+      var midA = kind === "falsapos" ? "pontos x_k" : "pontos médios";
+      legend = [{t:"line",c:"ink",l:"f(x)",a:"f(x)"}];
+      if (kind === "falsapos") legend.push({t:"line",c:"sky",l:"cordas",a:"cordas"});
+      legend.push({t:"dot",c:"danger",l:"extremos do intervalo",a:"extremos do intervalo"},
+                  {t:"dot",c:"teal",l:midL,a:midA},
+                  {t:"dot",c:"brass",l:"raiz aproximada",a:"raiz aproximada"});
+    }
+
+    var ys = [], N = 500, k;
+    curves.forEach(function(c){
+      for (k=0; k<=N; k++){ var y = c.fn(xMin + (xMax-xMin)*k/N); if (isFinite(y)) ys.push(y); }
+    });
+    segs.forEach(function(s){ [s[1], s[3]].forEach(function(v){ if (isFinite(v)) ys.push(v); }); });
+    pts.forEach(function(p){ if (isFinite(p.y)) ys.push(p.y); });
+    if (!ys.length) ys = [0, 1];
+    var yMin = Math.min.apply(null, ys), yMax = Math.max.apply(null, ys);
+    var yPad = Math.max(yMax - yMin, 1e-9) * .15; yMin -= yPad; yMax += yPad;
+    if (yMin > 0) yMin = Math.min(0, yMin);
+    if (yMax < 0) yMax = Math.max(0, yMax);
+    return {kind:kind, interval:interval, first:its[0], xMin:xMin, xMax:xMax, yMin:yMin, yMax:yMax,
+            curves:curves, segs:segs, pts:pts, legend:legend};
+  }
+
+  // desenha o gráfico no PDF; devolve o y logo abaixo da legenda
+  function pdfRootGraph(doc, M, gx0, gy0, gw, gh){
+    function psx(x){ return gx0 + (x - M.xMin)/(M.xMax - M.xMin)*gw; }
+    function psy(v){ return gy0 + gh - (v - M.yMin)/(M.yMax - M.yMin)*gh; }
+    var gxNice = niceAxisTicks(M.xMin, M.xMax, 8), gyNice = niceAxisTicks(M.yMin, M.yMax, 6);
+    doc.setDrawColor(225,225,225); doc.setLineWidth(.5);
+    gxNice.values.forEach(function(v){ var q = psx(v); doc.line(q, gy0, q, gy0+gh); });
+    gyNice.values.forEach(function(v){ var q = psy(v); doc.line(gx0, q, gx0+gw, q); });
+    if (M.xMin <= 0 && M.xMax >= 0){ doc.setDrawColor(150,150,150); doc.setLineWidth(.8); doc.line(psx(0), gy0, psx(0), gy0+gh); }
+    if (M.yMin <= 0 && M.yMax >= 0){ doc.setDrawColor(150,150,150); doc.setLineWidth(.8); doc.line(gx0, psy(0), gx0+gw, psy(0)); }
+    doc.setFont("helvetica","normal"); doc.setFontSize(6.5); doc.setTextColor(120,120,120); doc.setDrawColor(170,170,170); doc.setLineWidth(.5);
+    gxNice.values.forEach(function(v){ var p = psx(v); doc.line(p, gy0+gh, p, gy0+gh+3); doc.text(niceAxisFmt(v, gxNice.decimals), p, gy0+gh+11, {align:"center"}); });
+    gyNice.values.forEach(function(v){ var p = psy(v); doc.line(gx0-3, p, gx0, p); doc.text(niceAxisFmt(v, gyNice.decimals), gx0-5, p+2.2, {align:"right"}); });
+
+    var canDash = typeof doc.setLineDashPattern === "function";
+    M.curves.forEach(function(c){
+      var rgb = GRAPH_RGB[c.color];
+      doc.setDrawColor(rgb[0], rgb[1], rgb[2]);
+      doc.setLineWidth(c.dash ? 1 : 1.5);
+      if (c.dash && canDash) doc.setLineDashPattern([3,2], 0);
+      var prev = null;
+      for (var i=0; i<=320; i++){
+        var fx = M.xMin + (M.xMax - M.xMin)*i/320, fy = c.fn(fx);
+        if (!isFinite(fy)){ prev = null; continue; }
+        var cx = psx(fx), cy = psy(fy);
+        if (prev) doc.line(prev[0], prev[1], cx, cy);
+        prev = [cx, cy];
+      }
+      if (c.dash && canDash) doc.setLineDashPattern([], 0);
+    });
+    M.segs.forEach(function(s){
+      var rgb = GRAPH_RGB[s[4]];
+      if (!isFinite(s[1]) || !isFinite(s[3])) return;
+      doc.setDrawColor(rgb[0], rgb[1], rgb[2]); doc.setLineWidth(.6);
+      doc.line(psx(s[0]), psy(s[1]), psx(s[2]), psy(s[3]));
+    });
+    M.pts.forEach(function(p){
+      var rgb = GRAPH_RGB[p.c];
+      doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+      doc.circle(psx(p.x), psy(p.y), p.r * 0.55, "F");
+    });
+    doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(90,90,90);
+    if (M.interval){
+      doc.text("a = " + bisFmt(M.first.a), gx0, gy0+gh+22);
+      doc.text("b = " + bisFmt(M.first.b), gx0+gw, gy0+gh+22, {align:"right"});
+    }
+    var legY = gy0 + gh + 36, legX = gx0;
+    M.legend.forEach(function(it){
+      var rgb = GRAPH_RGB[it.c];
+      if (it.t === "line"){ doc.setDrawColor(rgb[0], rgb[1], rgb[2]); doc.setLineWidth(1.6); doc.line(legX, legY-2.2, legX+11, legY-2.2); }
+      else { doc.setFillColor(rgb[0], rgb[1], rgb[2]); doc.circle(legX+5, legY-2.2, 2.6, "F"); }
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor(90,90,90);
+      doc.text(it.a, legX+15, legY);
+      legX += 15 + doc.getTextWidth(it.a) + 16;
+    });
+    return legY + 16;
+  }
+
+  // ---------- tela: resultado (tabela) e gráfico ----------
+  function renderBisection(run){
+    var body = document.getElementById("stepsBody");
+    body.innerHTML = "";
+    var kind = run.kind || "bissecao";
+    var sum = document.createElement("div"); sum.className = "bis-summary";
+    var stats = [
+      ["Raiz aproximada", bisFmt(run.root)],
+      ["f(x)", bisFmt(run.rootFx)],
+      ["Iterações", String(run.iterations.length)],
+      ["Critério", state.bisStopMode === "tol" ? "Eₖ < " + bisFmt(state.bisTolerance) : state.bisNumIter + " iterações"]
+    ];
+    stats.forEach(function(v){
+      var d = document.createElement("div"); d.className = "bis-stat";
+      d.innerHTML = "<small>" + v[0] + "</small><strong>" + v[1] + "</strong>"; sum.appendChild(d);
+    });
+    body.appendChild(sum);
+
+    var formula = {
+      bissecao: "xₖ = (aₖ + bₖ) / 2.",
+      falsapos: "xₖ = (aₖ·f(bₖ) − bₖ·f(aₖ)) / (f(bₖ) − f(aₖ)).",
+      pontofixo: "xₖ = φ(xₖ₋₁), com x₀ dado.",
+      newton: "xₖ = xₖ₋₁ − f(xₖ₋₁) / f′(xₖ₋₁), com x₀ dado."
+    }[kind];
+    var note = document.createElement("div"); note.className = "hint"; note.style.margin = "0 0 9px";
+    note.textContent = formula + "  Eₖ = |xₖ − xₖ₋₁| / |xₖ|. Para k = 0, o erro não é definido.";
+    body.appendChild(note);
+
+    if (run.interval && run.interval.auto){
+      var iv = run.interval, box = document.createElement("div"); box.className = "hint"; box.style.margin = "0 0 6px";
+      box.textContent = kind === "newton"
+        ? "Tabela de valores de f(x): a troca de sinal está entre x = " + bisFmt(iv.a) + " e x = " + bisFmt(iv.b) + ", então x₀ = " + bisFmt(iv.x0) + " (ponto médio)."
+        : "Tabela de valores de f(x): a troca de sinal está entre x = " + bisFmt(iv.a) + " e x = " + bisFmt(iv.b) + ", então o intervalo inicial é [" + bisFmt(iv.a) + ", " + bisFmt(iv.b) + "].";
+      body.appendChild(box);
+      var w0 = document.createElement("div"); w0.className = "bis-table-wrap";
+      var t0 = document.createElement("table"); t0.className = "bis-table-grid"; t0.style.minWidth = "0";
+      var hr = document.createElement("tr");
+      ["x","f(x)","sinal"].forEach(function(h){ var th = document.createElement("th"); th.textContent = h; hr.appendChild(th); });
+      t0.appendChild(hr);
+      iv.info.table.forEach(function(r){
+        var tr0 = document.createElement("tr");
+        [bisFmt(r.x), bisFmt(r.fx), r.fx < 0 ? "negativo" : r.fx > 0 ? "positivo" : "zero"].forEach(function(v, c){
+          var td0 = document.createElement("td"); td0.textContent = v;
+          if (c === 2) td0.className = r.fx < 0 ? "bis-sign-neg" : "bis-sign-pos";
+          tr0.appendChild(td0);
+        });
+        t0.appendChild(tr0);
+      });
+      w0.appendChild(t0); body.appendChild(w0);
+      var sp = document.createElement("div"); sp.style.height = "10px"; body.appendChild(sp);
+    }
+
+    var td = rootTableData(run, false);
+    var wrap = document.createElement("div"); wrap.className = "bis-table-wrap";
+    var t = document.createElement("table"); t.className = "bis-table-grid";
+    t.style.minWidth = kind === "bissecao" || kind === "falsapos" ? "760px" : "520px";
+    var tr = document.createElement("tr");
+    td.headers.forEach(function(h){ var th = document.createElement("th"); th.textContent = h; tr.appendChild(th); });
+    t.appendChild(tr);
+    run.iterations.forEach(function(it, ri){
+      var r = document.createElement("tr");
+      td.rows[ri].forEach(function(v, c){
+        var cell = document.createElement("td"); cell.textContent = v;
+        if (c === 6 && (kind === "bissecao" || kind === "falsapos")) cell.className = it.sign === "neg" ? "bis-sign-neg" : "bis-sign-pos";
+        r.appendChild(cell);
+      });
+      t.appendChild(r);
+    });
+    wrap.appendChild(t); body.appendChild(wrap);
+
+    var fin = document.createElement("div"); fin.className = "final-box";
+    var h = document.createElement("h3");
+    h.textContent = run.stopReason ? "Cálculo interrompido" : run.convergedAt !== null ? "Critério atingido" : (state.bisStopMode === "tol" ? "Limite de iterações atingido" : "Iterações concluídas");
+    fin.appendChild(h);
+    var p = document.createElement("div"); p.style.fontSize = "12.5px";
+    if (run.stopReason) p.textContent = run.stopReason;
+    else if (run.convergedAt !== null)
+      p.textContent = state.bisStopMode === "tol" ? "A tolerância foi satisfeita na iteração " + run.convergedAt + "." : "A raiz foi aproximada após " + run.iterations.length + " iterações.";
+    else if (state.bisStopMode === "tol")
+      p.textContent = "A tolerância não foi atingida dentro do limite de " + MAX_ITER + " iterações.";
+    else if (kind === "bissecao" || kind === "falsapos")
+      p.textContent = "O número de iterações definido (" + state.bisNumIter + ") foi atingido sem que f(xₖ) chegasse a zero.";
+    else
+      p.textContent = "Foram feitas " + state.bisNumIter + " iterações (k = 0 até " + state.bisNumIter + ").";
+    fin.appendChild(p); body.appendChild(fin);
+  }
+
   function drawBisectionGraph(run){
-    var svg=document.getElementById("bisGraphSvg");
-    var W=900,H=560, pad={l:65,r:25,t:25,b:55};
-    while(svg.firstChild) svg.removeChild(svg.firstChild);
-    function el(tag,attrs,text){
-      var n=document.createElementNS("http://www.w3.org/2000/svg",tag);
-      Object.keys(attrs||{}).forEach(function(k){n.setAttribute(k,attrs[k]);});
-      if(text!==undefined)n.textContent=text; svg.appendChild(n); return n;
+    var M = rootGraphModel(run);
+    var svg = document.getElementById("bisGraphSvg");
+    var W = 900, H = 560, pad = {l:65, r:25, t:25, b:55};
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    function el(tag, attrs, text){
+      var n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      Object.keys(attrs || {}).forEach(function(k){ n.setAttribute(k, attrs[k]); });
+      if (text !== undefined) n.textContent = text; svg.appendChild(n); return n;
     }
-    var xs=run.iterations.map(function(d){return d.x;}).concat([run.iterations[0].a,run.iterations[0].b]);
-    var lo=Math.min.apply(null,xs), hi=Math.max.apply(null,xs);
-    var span=Math.max(hi-lo,1e-9), xMin=lo-span*.12, xMax=hi+span*.12;
-    var samples=500, pts=[], yVals=[];
-    for(var i=0;i<=samples;i++){
-      var x=xMin+(xMax-xMin)*i/samples, y=run.f(x);
-      if(isFinite(y)){pts.push([x,y]);yVals.push(y);}
+    function sx(x){ return pad.l + (x - M.xMin)/(M.xMax - M.xMin)*(W - pad.l - pad.r); }
+    function sy(y){ return H - pad.b - (y - M.yMin)/(M.yMax - M.yMin)*(H - pad.t - pad.b); }
+    var xNice = niceAxisTicks(M.xMin, M.xMax, 8), yNice = niceAxisTicks(M.yMin, M.yMax, 6);
+    xNice.values.forEach(function(v){ var p = sx(v); el("line", {x1:p, y1:pad.t, x2:p, y2:H-pad.b, stroke:"var(--line-soft)", "stroke-width":"1"}); });
+    yNice.values.forEach(function(v){ var p = sy(v); el("line", {x1:pad.l, y1:p, x2:W-pad.r, y2:p, stroke:"var(--line-soft)", "stroke-width":"1"}); });
+    if (M.xMin <= 0 && M.xMax >= 0) el("line", {x1:sx(0), y1:pad.t, x2:sx(0), y2:H-pad.b, stroke:"var(--ink-faint)", "stroke-width":"1.3"});
+    if (M.yMin <= 0 && M.yMax >= 0) el("line", {x1:pad.l, y1:sy(0), x2:W-pad.r, y2:sy(0), stroke:"var(--ink-faint)", "stroke-width":"1.3"});
+    xNice.values.forEach(function(v){
+      var p = sx(v);
+      el("line", {x1:p, y1:H-pad.b, x2:p, y2:H-pad.b+5, stroke:"var(--ink-faint)", "stroke-width":"1"});
+      el("text", {x:p, y:H-pad.b+19, fill:"var(--ink-soft)", "font-size":"11", "text-anchor":"middle"}, niceAxisFmt(v, xNice.decimals));
+    });
+    yNice.values.forEach(function(v){
+      var p = sy(v);
+      el("line", {x1:pad.l-5, y1:p, x2:pad.l, y2:p, stroke:"var(--ink-faint)", "stroke-width":"1"});
+      el("text", {x:pad.l-9, y:p+4, fill:"var(--ink-soft)", "font-size":"11", "text-anchor":"end"}, niceAxisFmt(v, yNice.decimals));
+    });
+    M.curves.forEach(function(c){
+      var d = "", pen = false;
+      for (var i=0; i<=500; i++){
+        var x = M.xMin + (M.xMax - M.xMin)*i/500, y = c.fn(x);
+        if (!isFinite(y)){ pen = false; continue; }
+        d += (pen ? "L" : "M") + sx(x).toFixed(2) + " " + sy(y).toFixed(2) + " "; pen = true;
+      }
+      var at = {d:d, fill:"none", stroke:GRAPH_CSS[c.color], "stroke-width":String(c.width), "stroke-linecap":"round"};
+      if (c.dash) at["stroke-dasharray"] = "7 5";
+      el("path", at);
+    });
+    M.segs.forEach(function(s){
+      if (!isFinite(s[1]) || !isFinite(s[3])) return;
+      el("line", {x1:sx(s[0]), y1:sy(s[1]), x2:sx(s[2]), y2:sy(s[3]), stroke:GRAPH_CSS[s[4]], "stroke-width":"1.3", opacity:".85"});
+    });
+    M.pts.forEach(function(p){ el("circle", {cx:sx(p.x), cy:sy(p.y), r:p.r, fill:GRAPH_CSS[p.c]}); });
+    el("text", {x:W-pad.r, y:H-16, fill:"var(--ink-soft)", "font-size":"13", "text-anchor":"end"}, "x");
+    el("text", {x:18, y:pad.t+4, fill:"var(--ink-soft)", "font-size":"13"}, M.kind === "pontofixo" ? "φ(x)" : "f(x)");
+    if (M.interval){
+      el("text", {x:pad.l, y:H-16, fill:"var(--ink-faint)", "font-size":"11"}, "a = " + bisFmt(M.first.a));
+      el("text", {x:W-pad.r, y:H-16, fill:"var(--ink-faint)", "font-size":"11", "text-anchor":"end"}, "b = " + bisFmt(M.first.b));
     }
-    var yMin=Math.min.apply(null,yVals), yMax=Math.max.apply(null,yVals);
-    var ys=Math.max(yMax-yMin,1e-9), yPad=ys*.15; yMin-=yPad; yMax+=yPad;
-    if(yMin>0)yMin=Math.min(0,yMin); if(yMax<0)yMax=Math.max(0,yMax);
-    function sx(x){return pad.l+(x-xMin)/(xMax-xMin)*(W-pad.l-pad.r);}
-    function sy(y){return H-pad.b-(y-yMin)/(yMax-yMin)*(H-pad.t-pad.b);}
-    // grid + números dos eixos: usa passos "redondos" (ex.: 1, 2, 5, 0.5, 0.05...)
-    // em vez de dividir o intervalo em partes iguais, pra não gerar números feios.
-    var xNice = niceAxisTicks(xMin, xMax, 8);
-    var yNice = niceAxisTicks(yMin, yMax, 6);
-    xNice.values.forEach(function(xv){
-      var xp=sx(xv);
-      el("line",{x1:xp,y1:pad.t,x2:xp,y2:H-pad.b,stroke:"var(--line-soft)","stroke-width":"1"});
-    });
-    yNice.values.forEach(function(yv){
-      var yp=sy(yv);
-      el("line",{x1:pad.l,y1:yp,x2:W-pad.r,y2:yp,stroke:"var(--line-soft)","stroke-width":"1"});
-    });
-    if(xMin<=0&&xMax>=0) el("line",{x1:sx(0),y1:pad.t,x2:sx(0),y2:H-pad.b,stroke:"var(--ink-faint)","stroke-width":"1.3"});
-    if(yMin<=0&&yMax>=0) el("line",{x1:pad.l,y1:sy(0),x2:W-pad.r,y2:sy(0),stroke:"var(--ink-faint)","stroke-width":"1.3"});
-    xNice.values.forEach(function(xv){
-      var xp=sx(xv);
-      el("line",{x1:xp,y1:H-pad.b,x2:xp,y2:H-pad.b+5,stroke:"var(--ink-faint)","stroke-width":"1"});
-      el("text",{x:xp,y:H-pad.b+19,fill:"var(--ink-soft)","font-size":"11","text-anchor":"middle"},niceAxisFmt(xv,xNice.decimals));
-    });
-    yNice.values.forEach(function(yv){
-      var yp=sy(yv);
-      el("line",{x1:pad.l-5,y1:yp,x2:pad.l,y2:yp,stroke:"var(--ink-faint)","stroke-width":"1"});
-      el("text",{x:pad.l-9,y:yp+4,fill:"var(--ink-soft)","font-size":"11","text-anchor":"end"},niceAxisFmt(yv,yNice.decimals));
-    });
-    var d=pts.map(function(p,i){return (i?"L":"M")+sx(p[0]).toFixed(2)+" "+sy(p[1]).toFixed(2);}).join(" ");
-    el("path",{d:d,fill:"none",stroke:"var(--ink)","stroke-width":"2.4","stroke-linecap":"round"});
-    var first=run.iterations[0], last=run.iterations[run.iterations.length-1];
-    [first.a,first.b].forEach(function(x){var y=run.f(x); if(isFinite(y))el("circle",{cx:sx(x),cy:sy(y),r:5,fill:"var(--danger)"});});
-    run.iterations.forEach(function(it,i){
-      if(isFinite(it.fx)) el("circle",{cx:sx(it.x),cy:sy(it.fx),r:i===run.iterations.length-1?7:4.5,fill:i===run.iterations.length-1?"var(--brass)":"var(--teal)"});
-    });
-    el("text",{x:W-pad.r,y:H-16,fill:"var(--ink-soft)","font-size":"13","text-anchor":"end"},"x");
-    el("text",{x:18,y:pad.t+4,fill:"var(--ink-soft)","font-size":"13"},"f(x)");
-    el("text",{x:pad.l,y:H-16,fill:"var(--ink-faint)","font-size":"11"},"a = "+bisFmt(first.a));
-    el("text",{x:W-pad.r,y:H-16,fill:"var(--ink-faint)","font-size":"11","text-anchor":"end"},"b = "+bisFmt(first.b));
+    var lg = document.getElementById("bisLegend");
+    if (lg) lg.innerHTML = M.legend.map(function(it){
+      return '<span><i class="' + (it.t === "line" ? "bis-line" : "bis-dot") + '" style="background:' + GRAPH_CSS[it.c] + '"></i> ' + it.l + '</span>';
+    }).join("");
+    var gt = document.getElementById("bisGraphTitle");
+    if (gt) gt.textContent = {bissecao:"Gráfico — Método da Bisseção", falsapos:"Gráfico — Método da Posição Falsa",
+      pontofixo:"Gráfico — Método do Ponto Fixo", newton:"Gráfico — Método de Newton"}[M.kind];
+  }
+
+  // mostra/esconde os campos conforme o método de raízes escolhido
+  function syncRootFields(){
+    var m = state.method;
+    function show(id, on){ var e = document.getElementById(id); if (e) e.style.display = on ? "" : "none"; }
+    show("bisIntervalGrid", rootIsInterval(m));
+    show("intervalHint", rootIsInterval(m));
+    show("x0Hint", m === "newton");
+    show("fieldX0", m === "pontofixo" || m === "newton");
+    show("fieldPhi", m === "pontofixo");
+    show("fieldDeriv", m === "newton");
+    var lab = document.getElementById("bisFunctionLabel");
+    if (lab) lab.textContent = m === "pontofixo" ? "Função f(x) — opcional (preenche a coluna f(xₖ))" : "Função f(x)";
+    var gb = document.getElementById("btnBisGraph");
+    if (gb) gb.textContent = m === "pontofixo" ? "Gráfico (φ e y = x)" : "Gráfico da função";
+    var chkLabel = document.querySelector("label[for='chkBisChart']");
+    if (chkLabel){
+      var metodosNome = {bissecao:"bisseção", falsapos:"posição falsa", pontofixo:"ponto fixo", newton:"Newton"};
+      chkLabel.title = "Inclui o gráfico da função e os pontos do método de " + (metodosNome[m] || m) + " no PDF e no código Scilab (.sce)";
+    }
+  }
+  function updateDerivHint(){
+    var h = document.getElementById("derivHint");
+    if (!h) return;
+    var a = autoDerivative(state);
+    h.textContent = a ? "f′(x) = " + a + "  (calculada automaticamente)" : (String(state.bisFunction || "").trim() ? "Não consegui derivar essa f(x); usando derivada numérica (diferença central)." : "A derivada f′(x) é calculada automaticamente a partir de f(x).");
+  }
+  function pushRootDom(){
+    document.getElementById("rootX0").value = ivBlank(state.rootX0) ? "" : state.rootX0;
+    document.getElementById("rootPhi").value = state.rootPhi || "";
   }
 
   function runCurrentBisection(){
     try{
-      var run=bisectionRun(state.bisFunction,state.bisA,state.bisB,state.bisStopMode,state.bisNumIter,state.bisTolerance);
-      lastComputation={method:"bissecao",run:run};
+      updateDerivHint();
+      var run=rootRunFor(state);
+      lastComputation={method:state.method,run:run};
       renderBisection(run);
       return run;
     }catch(err){
@@ -1375,11 +2048,11 @@
     wrap.innerHTML = "";
     var caption = document.getElementById("matrixCaption");
 
-    if (state.method === "bissecao"){
-      // Os controles da Bisseção ficam em um único painel acima.
-      // Não duplicar função/intervalo no editor central.
-      document.getElementById("matrixHead").textContent = "BISSEÇÃO";
-      caption.textContent = "Use os campos de função, A e B acima para configurar o intervalo inicial.";
+    if (isRoot(state.method)){
+      document.getElementById("matrixHead").textContent = {bissecao:"BISSEÇÃO", falsapos:"POSIÇÃO FALSA", pontofixo:"PONTO FIXO", newton:"MÉTODO DE NEWTON"}[state.method];
+      caption.textContent = rootIsInterval(state.method)
+        ? "Use os campos de função, A e B acima para configurar o intervalo inicial."
+        : "Use os campos acima para configurar a função, o chute inicial x₀ e o critério de parada.";
     } else if (state.method === "gauss"){
       resizeGauss();
       document.getElementById("matrixHead").textContent = "MATRIZ AUMENTADA [A | b]";
@@ -2258,7 +2931,7 @@ if rhoOk then
   var lastComputation = null;
 
   function matrizVazia(){
-    if (state.method === "bissecao") return !String(state.bisFunction || "").trim();
+    if (isRoot(state.method)) return !String(state.bisFunction || "").trim() && !String(state.rootPhi || "").trim();
     var zero = function(v){ return !Number(v); };
     return state.A.every(function(r){ return r.every(zero); }) &&
            (state.method === "gauss" || (state.b || []).every(zero));
@@ -2269,9 +2942,9 @@ if rhoOk then
       state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
       state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" :
       state.method === "seidel" ? "PASSO A PASSO — GAUSS-SEIDEL" :
-      state.method === "bissecao" ? "PASSO A PASSO — BISSEÇÃO" : "PASSO A PASSO — JACOBI";
+      state.method === "bissecao" ? "PASSO A PASSO — BISSEÇÃO" : state.method === "falsapos" ? "PASSO A PASSO — POSIÇÃO FALSA" : state.method === "pontofixo" ? "PASSO A PASSO — PONTO FIXO" : state.method === "newton" ? "PASSO A PASSO — NEWTON" : "PASSO A PASSO — JACOBI";
 
-    if (state.method === "bissecao"){
+    if (isRoot(state.method)){
       var bRun=runCurrentBisection();
       var bReady = !!bRun;
       document.getElementById("btnPdfScilab").disabled = !bReady;
@@ -2357,9 +3030,9 @@ if rhoOk then
   function syncDimsHint(m){
     var h = document.getElementById("dimsHint");
     h.textContent = m === "gauss" ? "A última coluna é o vetor b (termos independentes). Máximo: 6×6."
-      : m === "bissecao" ? "Método da Lista 3: intervalo inicial aberto para você informar e critério por iterações ou tolerância."
+      : isRoot(m) ? "Informe a função e os parâmetros do método; o critério de parada pode ser por iterações ou por tolerância."
       : "";
-    h.style.display = (m === "gauss" || m === "bissecao") ? "" : "none";
+    h.style.display = (m === "gauss" || isRoot(m)) ? "" : "none";
   }
 
   function setMethod(m){
@@ -2371,12 +3044,12 @@ if rhoOk then
       el.classList.toggle("active", el.dataset.method === m);
     });
     document.getElementById("jacobiParams").style.display = (m === "jacobi" || m === "seidel") ? "flex" : "none";
-    document.getElementById("bisectionParams").style.display = m === "bissecao" ? "flex" : "none";
+    document.getElementById("bisectionParams").style.display = isRoot(m) ? "flex" : "none";
     document.getElementById("rowsField").style.display = m === "gauss" ? "flex" : "none";
-    document.getElementById("colsField").style.display = m === "bissecao" ? "none" : "flex";
+    document.getElementById("colsField").style.display = isRoot(m) ? "none" : "flex";
     document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
-    document.getElementById("dimsPanel").classList.toggle("dims-full", m === "bissecao");
-    syncDimsHint(m);
+    document.getElementById("dimsPanel").classList.toggle("dims-full", isRoot(m));
+    syncDimsHint(m); syncRootFields();
     if (m !== "gauss"){ document.getElementById("colsVal").textContent = state.jn; }
     else { document.getElementById("colsVal").textContent = state.cols; document.getElementById("rowsVal").textContent = state.rows; }
     buildEditor(); render(); saveLocal();
@@ -2446,6 +3119,18 @@ if rhoOk then
       state.A = [[3,2,4],[1,1,2],[4,3,2]];
       state.b = [1,2,3];
       document.getElementById("colsVal").textContent = state.jn;
+    } else if (state.method === "falsapos" || state.method === "pontofixo" || state.method === "newton"){
+      // exemplos dos slides (Zeros de Funções)
+      state.bisStopMode = "iter"; state.bisNumIter = 3;
+      if (state.method === "falsapos"){ state.bisFunction = "2*x - cos(x)"; state.bisA = 0; state.bisB = 1; }
+      if (state.method === "pontofixo"){ state.bisFunction = "x^3 - 9*x + 3"; state.rootPhi = "x^3/9 + 1/3"; state.rootX0 = 0.5; }
+      if (state.method === "newton"){ state.bisFunction = "2*x - cos(x)"; state.rootX0 = 1; }
+      document.getElementById("bisFunction").value = state.bisFunction;
+      document.getElementById("bisA").value = state.bisA; document.getElementById("bisB").value = state.bisB;
+      document.getElementById("bisNumIter").value = state.bisNumIter;
+      document.getElementById("bisStopIter").checked = true; document.getElementById("bisStopTol").checked = false;
+      document.getElementById("bisFieldNumIter").style.display = ""; document.getElementById("bisFieldTolerance").style.display = "none";
+      pushRootDom();
     } else if (state.method === "bissecao"){
       state.bisFunction = "x^3 - 2*x - 5";
       state.bisA = 2; state.bisB = 3; state.bisNumIter = 5; state.bisStopMode = "iter"; state.bisTolerance = 0.001;
@@ -2471,10 +3156,11 @@ if rhoOk then
   });
 
   document.getElementById("btnClear").addEventListener("click", function(){
-    if (state.method === "bissecao"){
-      state.bisFunction = ""; state.bisA = 0; state.bisB = 1;
+    if (isRoot(state.method)){
+      state.rootPhi = ""; state.rootX0 = null; pushRootDom();
+      state.bisFunction = ""; state.bisA = null; state.bisB = null;
       document.getElementById("bisFunction").value = "";
-      document.getElementById("bisA").value = 0; document.getElementById("bisB").value = 1;
+      document.getElementById("bisA").value = ""; document.getElementById("bisB").value = "";
     } else if (state.method === "gauss"){ state.A = mk(state.rows, state.cols+1, 0); }
     else { state.A = mk(state.jn, state.jn, 0); state.b = new Array(state.jn).fill(0); }
     buildEditor(); render(); saveLocal();
@@ -2491,23 +3177,38 @@ if rhoOk then
     });
   });
   document.getElementById("bisFunction").addEventListener("input",function(){
-    state.bisFunction=this.value; saveLocal(); if(state.method==="bissecao") render();
+    state.bisFunction=this.value; saveLocal(); if(isRoot(state.method)) render();
   });
   document.getElementById("bisA").addEventListener("input",function(){
-    var v=parseFloat(this.value); if(isFinite(v)){state.bisA=v;saveLocal();if(state.method==="bissecao")render();}
+    var v=parseFloat(this.value);
+    if(this.validity && this.validity.badInput) return; // digitação incompleta/inválida (ex.: "-"): não mexe em nada
+    if(this.value.trim()===""){state.bisA=null;saveLocal();if(isRoot(state.method))render();}
+    else if(isFinite(v)){state.bisA=v;saveLocal();if(isRoot(state.method))render();}
   });
   document.getElementById("bisB").addEventListener("input",function(){
-    var v=parseFloat(this.value); if(isFinite(v)){state.bisB=v;saveLocal();if(state.method==="bissecao")render();}
+    var v=parseFloat(this.value);
+    if(this.validity && this.validity.badInput) return; // digitação incompleta/inválida (ex.: "-"): não mexe em nada
+    if(this.value.trim()===""){state.bisB=null;saveLocal();if(isRoot(state.method))render();}
+    else if(isFinite(v)){state.bisB=v;saveLocal();if(isRoot(state.method))render();}
   });
   document.getElementById("bisNumIter").addEventListener("input",function(){
-    var v=parseInt(this.value,10); state.bisNumIter=isNaN(v)?1:Math.max(1,Math.min(MAX_ITER,v)); saveLocal(); if(state.method==="bissecao")render();
+    var v=parseInt(this.value,10); state.bisNumIter=isNaN(v)?1:Math.max(1,Math.min(MAX_ITER,v)); saveLocal(); if(isRoot(state.method))render();
   });
   document.getElementById("bisTolerance").addEventListener("input",function(){
-    var v=parseFloat(this.value); if(isFinite(v)&&v>0){state.bisTolerance=v;saveLocal();if(state.method==="bissecao")render();}
+    var v=parseFloat(this.value); if(isFinite(v)&&v>0){state.bisTolerance=v;saveLocal();if(isRoot(state.method))render();}
   });
-  document.getElementById("btnBisTable").addEventListener("click",function(){if(state.method==="bissecao"){var r=runCurrentBisection();if(r)renderBisectionTableOnly(r);}});
+  document.getElementById("rootX0").addEventListener("input",function(){
+    var v=parseFloat(this.value);
+    if(this.validity && this.validity.badInput) return;
+    if(this.value.trim()===""){state.rootX0=null;saveLocal();if(isRoot(state.method))render();}
+    else if(isFinite(v)){state.rootX0=v;saveLocal();if(isRoot(state.method))render();}
+  });
+  document.getElementById("rootPhi").addEventListener("input",function(){
+    state.rootPhi=this.value; saveLocal(); if(isRoot(state.method)) render();
+  });
+  document.getElementById("btnBisTable").addEventListener("click",function(){if(isRoot(state.method)){var r=runCurrentBisection();if(r)renderBisectionTableOnly(r);}});
   document.getElementById("btnBisGraph").addEventListener("click",function(){
-    if(state.method!=="bissecao")return;
+    if(!isRoot(state.method))return;
     var r=runCurrentBisection(); if(!r)return;
     drawBisectionGraph(r); document.getElementById("bisGraphModal").classList.add("open");
   });
@@ -2882,7 +3583,7 @@ if rhoOk then
   async function downloadPdf(){
     var doc = buildPdf();
     if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : (state.method === "bissecao" ? "bissecao" : "jacobi")));
+    var nomeMetodo = metodoSlug(state.method);
     var filename = nomeMetodo + "-passo-a-passo.pdf";
     var blob = doc.output("blob");
     try{
@@ -3077,65 +3778,23 @@ if rhoOk then
       line("// "+questionTitle);
       blank(7);
 
-      if (comp.method === "bissecao"){
+      if (isRoot(comp.method)){
         var br = comp.run;
-        line("f(x) = " + st.bisFunction);
-        line("Intervalo inicial: [" + bisFmt(st.bisA) + ", " + bisFmt(st.bisB) + "]");
-        line("Critério: " + (st.bisStopMode === "tol" ? "tolerância E_k < " + bisFmt(st.bisTolerance) : st.bisNumIter + " iterações (0 até " + st.bisNumIter + ")"));
+        rootHeaderLines(st).forEach(function(l){ line(l); });
         blank(6);
         line("// Tabela de iterações");
-        var bh = ["k","a_k","b_k","x_k","f(x_k)","E_k","sinal de f(x_k)"];
-        var brs = br.iterations.map(function(it){ return [String(it.k),bisFmt(it.a),bisFmt(it.b),bisFmt(it.x),bisFmt(it.fx),bisErrorText(it.error),it.sign === "neg" ? "negativo" : it.sign === "pos" ? "positivo" : "zero"]; });
-        var bw = bh.map(function(h,c){ var m=h.length; brs.forEach(function(r){m=Math.max(m,r[c].length);}); return m; });
+        var tdat = rootTableData(br, true);
+        var bw = tdat.headers.map(function(h,c){ var mx=h.length; tdat.rows.forEach(function(r){ mx=Math.max(mx,r[c].length); }); return mx; });
         function bRow(r){ return r.map(function(v,c){ return c===0 ? v.padEnd(bw[c]) : v.padStart(bw[c]); }).join("   "); }
-        rowB(bRow(bh));
-        brs.forEach(function(r){ rowB(bRow(r)); });
+        rowB(bRow(tdat.headers));
+        tdat.rows.forEach(function(r){ rowB(bRow(r)); });
         blank(8);
-        line("// Raiz aproximada: " + bisFmt(br.root));
-        line("// f(x) = " + bisFmt(br.rootFx));
-        if (br.convergedAt !== null) line("// Critério atingido na iteração " + br.convergedAt + ".");
+        rootSummaryLines(st, br).forEach(function(l){ line(l); });
         if (st.bisChartOn){
           blank(10);
-          line("// Gráfico da função e pontos da bisseção");
+          line(rootChartTitle(comp.method));
           ensureSpace(265);
-          var gx0=margin, gy0=y, gw=pageW-margin*2, gh=210;
-          var pnts=br.iterations.map(function(it){return it.x;}).concat([br.iterations[0].a,br.iterations[0].b]);
-          var glo=Math.min.apply(null,pnts), ghi=Math.max.apply(null,pnts), gspan=Math.max(ghi-glo,1e-9);
-          var gxmin=glo-gspan*.12, gxmax=ghi+gspan*.12;
-          var gys=[]; for(var gi=0;gi<=180;gi++){var xx=gxmin+(gxmax-gxmin)*gi/180, yy=br.f(xx);if(isFinite(yy))gys.push(yy);}
-          var gymin=Math.min.apply(null,gys), gymax=Math.max.apply(null,gys), gyspan=Math.max(gymax-gymin,1e-9);
-          gymin-=gyspan*.15; gymax+=gyspan*.15; if(gymin>0)gymin=0;if(gymax<0)gymax=0;
-          function psx(x){return gx0+(x-gxmin)/(gxmax-gxmin)*gw;} function psy(v){return gy0+gh-(v-gymin)/(gymax-gymin)*gh;}
-          var gxNice = niceAxisTicks(gxmin, gxmax, 8);
-          var gyNice = niceAxisTicks(gymin, gymax, 6);
-          doc.setDrawColor(225,225,225); doc.setLineWidth(.5);
-          gxNice.values.forEach(function(gxv){var qx=psx(gxv);doc.line(qx,gy0,qx,gy0+gh);});
-          gyNice.values.forEach(function(gyv){var qy=psy(gyv);doc.line(gx0,qy,gx0+gw,qy);});
-          if(gxmin<=0&&gxmax>=0){doc.setDrawColor(150,150,150);doc.setLineWidth(.8);doc.line(psx(0),gy0,psx(0),gy0+gh);}
-          if(gymin<=0&&gymax>=0){doc.setDrawColor(150,150,150);doc.setLineWidth(.8);doc.line(gx0,psy(0),gx0+gw,psy(0));}
-          // Números nos eixos (mesma ideia da tela: dá pra ler a escala do gráfico).
-          doc.setFont("helvetica","normal");doc.setFontSize(6.5);doc.setTextColor(120,120,120);doc.setDrawColor(170,170,170);doc.setLineWidth(.5);
-          gxNice.values.forEach(function(gxv){var gxp=psx(gxv);doc.line(gxp,gy0+gh,gxp,gy0+gh+3);doc.text(niceAxisFmt(gxv,gxNice.decimals),gxp,gy0+gh+11,{align:"center"});});
-          gyNice.values.forEach(function(gyv){var gyp=psy(gyv);doc.line(gx0-3,gyp,gx0,gyp);doc.text(niceAxisFmt(gyv,gyNice.decimals),gx0-5,gyp+2.2,{align:"right"});});
-          doc.setDrawColor(35,35,35);doc.setLineWidth(1.5);var prev=null;
-          for(var gi3=0;gi3<=320;gi3++){var fx=gxmin+(gxmax-gxmin)*gi3/320, fy=br.f(fx);if(!isFinite(fy)){prev=null;continue;}var cx=psx(fx),cy=psy(fy);if(prev)doc.line(prev[0],prev[1],cx,cy);prev=[cx,cy];}
-          doc.setFillColor(190,65,65);br.iterations.slice(0,1).forEach(function(it){doc.circle(psx(it.a),psy(br.f(it.a)),3,"F");doc.circle(psx(it.b),psy(br.f(it.b)),3,"F");});
-          br.iterations.forEach(function(it,ii){doc.setFillColor(ii===br.iterations.length-1?190:40,ii===br.iterations.length-1?145:150,ii===br.iterations.length-1?40:150);doc.circle(psx(it.x),psy(it.fx),ii===br.iterations.length-1?4:2.5,"F");});
-          doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90,90,90);doc.text("a = "+bisFmt(br.iterations[0].a),gx0,gy0+gh+22);doc.text("b = "+bisFmt(br.iterations[0].b),gx0+gw,gy0+gh+22,{align:"right"});
-          // Legenda das cores — pra ficar claro o que cada bolinha representa.
-          var legY=gy0+gh+36, legX=gx0;
-          function legendItem(dotColor, label, isLine){
-            if (isLine){ doc.setDrawColor.apply(doc,dotColor); doc.setLineWidth(1.6); doc.line(legX,legY-2.2,legX+11,legY-2.2); }
-            else { doc.setFillColor.apply(doc,dotColor); doc.circle(legX+5,legY-2.2,2.6,"F"); }
-            doc.setFont("helvetica","normal");doc.setFontSize(8);doc.setTextColor(90,90,90);
-            doc.text(label,legX+15,legY);
-            legX += 15 + doc.getTextWidth(label) + 16;
-          }
-          legendItem([35,35,35],"f(x)",true);
-          legendItem([190,65,65],"extremos do intervalo");
-          legendItem([40,150,150],"pontos médios");
-          legendItem([190,145,40],"raiz aproximada");
-          y=legY+16;
+          y = pdfRootGraph(doc, rootGraphModel(br), margin, y, pageW-margin*2, 210);
         }
       } else if (comp.method === "gauss"){
         var todos = comp.steps;
@@ -3330,23 +3989,18 @@ if rhoOk then
       push("// "+questionTitle);
       blankLine();
 
-      if (comp.method === "bissecao"){
+      if (isRoot(comp.method)){
         var br = comp.run;
-        push("f(x) = " + st.bisFunction);
-        push("Intervalo inicial: [" + bisFmt(st.bisA) + ", " + bisFmt(st.bisB) + "]");
-        push("Critério: " + (st.bisStopMode === "tol" ? "tolerância E_k < " + bisFmt(st.bisTolerance) : st.bisNumIter + " iterações (0 até " + st.bisNumIter + ")"));
+        rootHeaderLines(st).forEach(function(l){ push(l); });
         blankLine();
         push("// Tabela de iterações");
-        var bh=["k","a_k","b_k","x_k","f(x_k)","E_k","sinal de f(x_k)"];
-        var brs=br.iterations.map(function(it){return [String(it.k),bisFmt(it.a),bisFmt(it.b),bisFmt(it.x),bisFmt(it.fx),bisErrorText(it.error),it.sign === "neg" ? "negativo" : it.sign === "pos" ? "positivo" : "zero"];});
-        var bw=bh.map(function(h,c){var m=h.length;brs.forEach(function(r){m=Math.max(m,r[c].length);});return m;});
-        function bRow(r){return r.map(function(v,c){return c===0?v.padEnd(bw[c]):v.padStart(bw[c]);}).join("   ");}
-        push(bRow(bh)); brs.forEach(function(r){push(bRow(r));});
+        var tdat = rootTableData(br, true);
+        var bw = tdat.headers.map(function(h,c){ var mx=h.length; tdat.rows.forEach(function(r){ mx=Math.max(mx,r[c].length); }); return mx; });
+        function bRow(r){ return r.map(function(v,c){ return c===0 ? v.padEnd(bw[c]) : v.padStart(bw[c]); }).join("   "); }
+        push(bRow(tdat.headers)); tdat.rows.forEach(function(r){ push(bRow(r)); });
         blankLine();
-        push("// Raiz aproximada: " + bisFmt(br.root));
-        push("// f(x) = " + bisFmt(br.rootFx));
-        if(br.convergedAt!==null) push("// Critério atingido na iteração " + br.convergedAt + ".");
-        if(st.bisChartOn) push("// Gráfico da função e pontos da bisseção (com escala e legenda): incluído no PDF.");
+        rootSummaryLines(st, br).forEach(function(l){ push(l); });
+        if (st.bisChartOn) push("// Gráfico (com escala e legenda): incluído no PDF.");
       } else if (comp.method === "gauss"){
         var todos = comp.steps;
         push("-->A");
@@ -3592,14 +4246,14 @@ if rhoOk then
 
   document.getElementById("btnPreviewOne").addEventListener("click", function(){
     if (!lastComputation) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : (state.method === "bissecao" ? "bissecao" : "jacobi")));
+    var nomeMetodo = metodoSlug(state.method);
     openPreviewModal([{st: state, comp: lastComputation}], nomeMetodo + "-scilab-editado", "Visualizar — questão atual");
   });
 
   async function downloadScilabPdf(){
     var doc = buildScilabPdf();
     if (!doc) return;
-    var nomeMetodo = state.method === "gauss" ? "escalonamento" : (state.method === "lu" ? "fatoracao-lu" : (state.method === "seidel" ? "gauss-seidel" : (state.method === "bissecao" ? "bissecao" : "jacobi")));
+    var nomeMetodo = metodoSlug(state.method);
     var filename = nomeMetodo + "-scilab.pdf";
     var blob = doc.output("blob");
     try{
@@ -3652,7 +4306,7 @@ if rhoOk then
   function computeFor(st){
     // A bisseção não usa matriz A/b: recalculamos diretamente a partir da
     // função, intervalo e critério que foram salvos junto com a questão.
-    if (st.method === "bissecao") return {method:"bissecao", run: bisectionRun(st.bisFunction, st.bisA, st.bisB, st.bisStopMode, st.bisNumIter, st.bisTolerance)};
+    if (isRoot(st.method)) return {method: st.method, run: rootRunFor(st)};
     if (st.method === "lu") return {method:"lu", run: luSteps(st.A, st.b)};
     if (st.method === "gauss") return {method:"gauss", steps: gaussJordanSteps(st.A)};
     var diag0 = st.A.some(function(row, i){ return Math.abs(row[i]) < 1e-9; });
@@ -3662,7 +4316,7 @@ if rhoOk then
   }
 
   function savedTitle(st){ return st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão"; }
-  function savedMethodName(st){ return st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : "Jacobi"))); }
+  function savedMethodName(st){ return st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : st.method === "falsapos" ? "Posição Falsa" : st.method === "pontofixo" ? "Ponto Fixo" : st.method === "newton" ? "Newton" : "Jacobi"))); }
 
   function renderSaved(){
     var panel = document.getElementById("savedPanel");
@@ -3860,6 +4514,27 @@ function escreve(t)
     mprintf("%s\n", t);
 endfunction
 
+function s = fnum(x)
+    // até 4 casas decimais, sem zeros à direita (mesmo formato do site)
+    if isnan(x) | isinf(x) then
+        s = "-";
+        return
+    end
+    r = floor(x*1e4 + 0.5)/1e4;
+    if r == 0 then r = 0; end
+    s = msprintf("%.4f", r);
+    k = length(s);
+    while part(s, k) == "0"
+        k = k - 1;
+    end
+    if part(s, k) == "." then k = k - 1; end
+    s = part(s, 1:k);
+endfunction
+
+`;
+  // versão de SCE_HELP_BASE sem a função escreve — usada quando chart=true,
+  // pra evitar dupla definição de escreve (o SCE_HELP_CAPTURE_RAIZ já define a versão completa)
+  var SCE_HELP_BASE_NOCAP = String.raw`// ---- apresentação: só formata o texto, igual ao PDF "Versão Scilab" ----
 function s = fnum(x)
     // até 4 casas decimais, sem zeros à direita (mesmo formato do site)
     if isnan(x) | isinf(x) then
@@ -4325,6 +5000,7 @@ end
     var fnAlt = fnNames.join("|");
     src = src.replace(new RegExp("(\\d|\\)|x)\\s*(?=x\\b|\\(|(?:"+fnAlt+")\\()", "gi"), "$1*")
              .replace(/(%pi|%e|\))\s*(?=x\b|[a-z])/gi, "$1*");
+    src = src.replace(/log10\*\(/g, "log10(");
 
     if (!src) src = "0";
     return src;
@@ -4365,8 +5041,9 @@ endfunction
     var code = SCE_HEADER + SCE_HELP_BASE + SCE_HELP_BIS;
     if (state.bisChartOn) code += SCE_HELP_CAPTURE;
     code += "function y = f(x)\n    y = " + expr + ";\nendfunction\n\n";
-    code += "a = " + fmtScilab(state.bisA) + ";\n";
-    code += "b = " + fmtScilab(state.bisB) + ";\n";
+    var ivS = resolveInterval(state);
+    code += "a = " + fmtScilab(ivS.a) + ";\n";
+    code += "b = " + fmtScilab(ivS.b) + ";\n";
     if (tolMode){
       code += "tol = " + fmtScilab(state.bisTolerance) + "; // tolerância: para quando E_k < tol\n";
       code += "maxIter = " + MAX_ITER + "; // limite de iterações\n\n";
@@ -4375,7 +5052,8 @@ endfunction
     }
     code += sceCabecalho();
     code += sceEscreve("f(x) = " + state.bisFunction);
-    code += sceEscreve("Intervalo inicial: [" + fmtScilab(state.bisA) + ", " + fmtScilab(state.bisB) + "]");
+    code += sceEscreve("Intervalo inicial: [" + fmtScilab(ivS.a) + ", " + fmtScilab(ivS.b) + "]");
+    ivTableLines(ivS).forEach(function(t){ code += sceEscreve(t); });
     code += sceEscreve("Critério: " + (tolMode ? "tolerância E_k < " + fmtScilab(state.bisTolerance) : state.bisNumIter + " iterações (0 até " + state.bisNumIter + ")"));
     code += "escreve(\"\");\n";
     code += sceEscreve("// Tabela de iterações");
@@ -4518,9 +5196,243 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
     return code;
   }
 
+  // ---------- .sce: Posição Falsa, Ponto Fixo e Newton ----------
+  var SCE_HELP_FNUM8 = String.raw`function s = fnum8(x)
+    // até 8 casas decimais, sem zeros à direita (mesma precisão das raízes no site)
+    if isnan(x) | isinf(x) then
+        s = "-";
+        return
+    end
+    r = floor(x*1e8 + 0.5)/1e8;
+    if r == 0 then r = 0; end
+    s = msprintf("%.8f", r);
+    k = length(s);
+    while part(s, k) == "0"
+        k = k - 1;
+    end
+    if part(s, k) == "." then k = k - 1; end
+    s = part(s, 1:k);
+endfunction
+
+function s = sinalf(v)
+    if v == 0 then
+        s = "zero";
+    elseif v < 0 then
+        s = "negativo";
+    else
+        s = "positivo";
+    end
+endfunction
+
+`;
+  var SCE_HELP_CAPTURE_RAIZ = String.raw`// ---- guarda cada linha impressa, pra poder desenhá-las junto com o gráfico no PDF ----
+global linhasConsole
+linhasConsole = [];
+function escreve(t)
+    mprintf("%s\n", t);
+    global linhasConsole
+    linhasConsole = [linhasConsole; t];
+endfunction
+
+`;
+
+  function sceGraficoRaiz(m, slug){
+    var interval = m === "falsapos";
+    var code = "\nescreve(\"\");\n";
+    code += sceEscreve(rootChartTitle(m));
+    if (interval){
+      code += "span = max(Bk(1) - Ak(1), 1e-9);\n" +
+              "xmin = min([Xk, Ak(1), Bk(1)]) - span*0.12;\n" +
+              "xmax = max([Xk, Ak(1), Bk(1)]) + span*0.12;\n";
+    } else {
+      code += "lo = min(Xk); hi = max(Xk);\n" +
+              "span = max(hi - lo, 0.25*max([abs(hi), abs(lo), 0.5]));\n" +
+              "xmin = lo - span*0.12;\n" +
+              "xmax = hi + span*0.12;\n";
+    }
+    code += "xs = linspace(xmin, xmax, 400);\nys = zeros(xs);\nfor i = 1:length(xs)\n    ys(i) = " +
+            (m === "pontofixo" ? "g" : "f") + "(xs(i));\nend\n";
+    code += String.raw`
+// --- monta uma única página, no tamanho padrão A4 (retrato), texto em cima e gráfico embaixo ---
+figPdf = gcf();
+clf(figPdf);
+figPdf.figure_size = [595, 842]; // A4 (210 x 297 mm) em pontos PDF — tamanho reconhecido como A4 de verdade
+
+nLin = size(linhasConsole, 1);
+
+// área de texto (topo)
+axTexto = newaxes();
+axTexto.axes_bounds = [0.02, 0.02, 0.96, 0.56];
+axTexto.axes_visible = ["off","off","off"];
+axTexto.data_bounds = [0, 0; 1, 1];
+yTopo = 0.97;
+passoY = 0.97 / max(nLin, 1);
+for i = 1:nLin
+    h = xstring(0.01, yTopo - (i-1)*passoY, linhasConsole(i));
+    if i >= inicioTabela & i <= fimTabela then
+        h.font_size = 0; // tabela: fonte um pouco menor, pra não estourar a largura da página A4
+        h.font_style = 0; // Courier Bold só na tabela
+    else
+        h.font_size = 1;
+        h.font_style = 2; // Courier normal no resto do texto
+    end
+end
+
+// área do gráfico (embaixo)
+axGrafico = newaxes();
+axGrafico.axes_bounds = [0.08, 0.62, 0.88, 0.34];
+plot(xs, ys, 'k-');
+`;
+    if (m === "falsapos"){
+      code += "plot([Ak(1) Bk(1)], [f(Ak(1)) f(Bk(1))], 'ro');\nplot(Xk, Fxk, 'gs');\nplot(Xk($), Fxk($), 'md');\n" +
+              "xtitle(\"Posição falsa - f(x)\", \"x\", \"f(x)\");\n" +
+              "legend([\"f(x)\", \"extremos do intervalo\", \"pontos xk\", \"raiz aproximada\"]);\n";
+    } else if (m === "pontofixo"){
+      code += "plot(xs, xs, 'b:');\nplot(Xk, Xk, 'gs');\nplot(Xk($), Xk($), 'md');\n" +
+              "xtitle(\"Ponto fixo - phi(x) e y = x\", \"x\", \"y\");\n" +
+              "legend([\"phi(x)\", \"y = x\", \"pontos xk\", \"raiz aproximada\"]);\n";
+    } else {
+      code += "plot(Xk, Fxk, 'gs');\nplot(Xk($), Fxk($), 'md');\n" +
+              "xtitle(\"Newton - f(x)\", \"x\", \"f(x)\");\n" +
+              "legend([\"f(x)\", \"pontos xk\", \"raiz aproximada\"]);\n";
+    }
+    code += String.raw`
+// --- exporta a página combinada em PDF, direto na pasta Downloads ---
+if getos() == "Windows" then
+    pastaBase = getenv("USERPROFILE");
+else
+    pastaBase = getenv("HOME");
+end
+pastaDownloads = fullfile(pastaBase, "Downloads");
+if ~isdir(pastaDownloads) then
+    mkdir(pastaDownloads);
+end
+`;
+    code += "nomeArqGrafico = fullfile(pastaDownloads, \"" + slug + "-grafico\");\n";
+    code += String.raw`xs2pdf(figPdf, nomeArqGrafico);
+escreve("");
+escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
+`;
+    return code;
+  }
+
+  function buildScilabCodeRaiz(){
+    if (!lastComputation || lastComputation.method !== state.method) return "";
+    var m = state.method, run = lastComputation.run;
+    var tolMode = state.bisStopMode === "tol";
+    var hasF = m === "pontofixo" ? run.hasF : true;
+    var chart = !!state.bisChartOn;
+    var code = SCE_HEADER + (chart ? SCE_HELP_BASE_NOCAP : SCE_HELP_BASE) + SCE_HELP_FNUM8;
+    if (chart) code += SCE_HELP_CAPTURE_RAIZ;
+
+    if (hasF) code += "function y = f(x)\n    y = " + bisExprToScilab(state.bisFunction) + ";\nendfunction\n\n";
+    if (m === "pontofixo") code += "function y = g(x)\n    y = " + bisExprToScilab(state.rootPhi) + ";\nendfunction\n\n";
+    if (m === "newton"){
+      if (effectiveDeriv(state))
+        code += "function y = df(x)\n    y = " + bisExprToScilab(effectiveDeriv(state)) + ";\nendfunction\n\n";
+      else
+        code += "function y = df(x)\n    // derivada numérica (diferença central)\n    h = 1e-6*max(1, abs(x));\n    y = (f(x+h) - f(x-h)) / (2*h);\nendfunction\n\n";
+    }
+
+    if (m === "falsapos"){
+      var ivF = resolveInterval(state);
+      code += "a = " + fmtScilab(ivF.a) + ";\nb = " + fmtScilab(ivF.b) + ";\n";
+    } else {
+      code += "x0 = " + fmtScilab(resolveX0(state).x0) + "; // chute inicial\n";
+    }
+    if (tolMode){
+      code += "tol = " + fmtScilab(state.bisTolerance) + "; // tolerância: para quando E_k < tol\n";
+      code += "maxIter = " + MAX_ITER + "; // limite de iterações\n\n";
+    } else {
+      code += "maxIter = " + state.bisNumIter + "; // número de iterações (gera as iterações de 0 até maxIter)\n\n";
+    }
+    code += sceCabecalho();
+    rootHeaderLines(state).forEach(function(l){ code += sceEscreve(l); });
+    code += "escreve(\"\");\n";
+    code += sceEscreve("// Tabela de iterações");
+
+    // ---- laço do método (calcula tudo aqui no Scilab) ----
+    var condTol = tolMode ? "    if ~isnan(e) & e < tol then\n        convergiu = %t; kConv = k; break;\n    end\n" : "";
+    if (m === "falsapos"){
+      code += "fa = f(a); fb = f(b);\n" +
+        "K = []; Ak = []; Bk = []; Xk = []; Fxk = []; Ek = [];\n" +
+        "xPrev = %nan;\nconvergiu = %f; kConv = -1; motivo = \"\";\n" +
+        "for k = 0:maxIter\n" +
+        "    x = (a*fb - b*fa) / (fb - fa);\n" +
+        "    fx = f(x);\n" +
+        "    if isnan(xPrev) then\n        e = %nan;\n    else\n        e = abs(x - xPrev) / abs(x);\n    end\n" +
+        "    K = [K, k]; Ak = [Ak, a]; Bk = [Bk, b]; Xk = [Xk, x]; Fxk = [Fxk, fx]; Ek = [Ek, e];\n" +
+        "    if fx == 0 then\n        convergiu = %t; kConv = k; break;\n    end\n" + condTol +
+        "    if fa * fx < 0 then\n        b = x; fb = fx;\n    else\n        a = x; fa = fx;\n    end\n" +
+        "    xPrev = x;\nend\n";
+    } else if (m === "pontofixo"){
+      code += "x = x0;\n" +
+        "K = 0; Xk = x; Pk = g(x); Ek = %nan;\n" + (hasF ? "Fxk = f(x);\n" : "") +
+        "convergiu = %f; kConv = -1; motivo = \"\";\n" +
+        "for k = 1:maxIter\n" +
+        "    xn = Pk($);\n" +
+        "    if abs(xn) > 0 then\n        e = abs(xn - x) / abs(xn);\n    else\n        e = abs(xn - x);\n    end\n" +
+        "    pn = g(xn);\n" +
+        "    K = [K, k]; Xk = [Xk, xn]; Pk = [Pk, pn]; Ek = [Ek, e];\n" +
+        (hasF ? "    fxn = f(xn);\n    Fxk = [Fxk, fxn];\n" : "") +
+        "    x = xn;\n" +
+        "    if isnan(pn) | isinf(pn) then\n        motivo = \"phi(x_k) deixou de ser um número real finito (a sequência diverge ou saiu do domínio de phi).\";\n        break;\n    end\n" +
+        (hasF ? "    if fxn == 0 then\n        convergiu = %t; kConv = k; break;\n    end\n" : "") + condTol +
+        "end\n";
+    } else {
+      code += "x = x0; xPrev = %nan;\n" +
+        "K = []; Xk = []; Ek = []; Fxk = []; Dk = [];\n" +
+        "convergiu = %f; kConv = -1; motivo = \"\";\n" +
+        "for k = 0:maxIter\n" +
+        "    fx = f(x); dfx = df(x);\n" +
+        "    if isnan(xPrev) then\n        e = %nan;\n    elseif abs(x) > 0 then\n        e = abs(x - xPrev) / abs(x);\n    else\n        e = abs(x - xPrev);\n    end\n" +
+        "    K = [K, k]; Xk = [Xk, x]; Ek = [Ek, e]; Fxk = [Fxk, fx]; Dk = [Dk, dfx];\n" +
+        "    if fx == 0 then\n        convergiu = %t; kConv = k; break;\n    end\n" + condTol +
+        "    if k == maxIter then break; end\n" +
+        "    if isnan(dfx) | isinf(dfx) | dfx == 0 then\n        motivo = \"f''(x_k) = 0 (ou indefinida): o método não pode continuar.\";\n        break;\n    end\n" +
+        "    xPrev = x;\n    x = x - fx/dfx;\n" +
+        "end\n";
+    }
+
+    // ---- tabela: cada coluna é (cabeçalho, expressão Scilab da linha i) ----
+    var cols;
+    if (m === "falsapos"){
+      cols = [["k","string(K(i))"],["a_k","fnum8(Ak(i))"],["b_k","fnum8(Bk(i))"],["x_k","fnum8(Xk(i))"],
+              ["f(x_k)","fnum8(Fxk(i))"],["E_k","fnum8(Ek(i))"],["sinal de f(x_k)","sinalf(Fxk(i))"]];
+    } else if (m === "pontofixo"){
+      cols = [["k","string(K(i))"],["x_k","fnum8(Xk(i))"],["phi(x_k)","fnum8(Pk(i))"],["E_k","fnum8(Ek(i))"]];
+      if (hasF) cols.push(["f(x_k)","fnum8(Fxk(i))"]);
+    } else {
+      cols = [["k","string(K(i))"],["x_k","fnum8(Xk(i))"],["E_k","fnum8(Ek(i))"],["f(x_k)","fnum8(Fxk(i))"],["f'(x_k)","fnum8(Dk(i))"]];
+    }
+    var NC = cols.length;
+    code += "N = length(K);\nT = emptystr(N+1, " + NC + ");\n";
+    cols.forEach(function(c, j){ code += "T(1," + (j+1) + ") = " + sceStr(c[0]) + ";\n"; });
+    code += "for i = 1:N\n";
+    cols.forEach(function(c, j){ code += "    T(i+1," + (j+1) + ") = " + c[1] + ";\n"; });
+    code += "end\n";
+    code += "w = zeros(1," + NC + ");\nfor c = 1:" + NC + "\n    w(c) = max(length(T(:,c)));\nend\n";
+    if (chart) code += "inicioTabela = size(linhasConsole,1) + 1; // marca onde a tabela começa, pra desenhar só ela em negrito no PDF\n";
+    code += "for r = 1:N+1\n    t = \"\";\n    for c = 1:" + NC + "\n" +
+      "        if c == 1 then\n            t = t + T(r,c) + blanks(w(c)-length(T(r,c)));\n" +
+      "        else\n            t = t + \"   \" + blanks(w(c)-length(T(r,c))) + T(r,c);\n        end\n    end\n    escreve(t);\nend\n";
+    if (chart) code += "fimTabela = size(linhasConsole,1); // marca onde a tabela termina\n";
+
+    // ---- resumo ----
+    code += "escreve(\"\");\n";
+    code += "escreve(msprintf(\"// Raiz aproximada: %s\", fnum8(Xk($))));\n";
+    if (hasF) code += "escreve(msprintf(\"// f(x) = %s\", fnum8(Fxk($))));\n";
+    code += "if convergiu then\n    escreve(msprintf(\"// Critério atingido na iteração %d.\", kConv));\nend\n";
+    code += "if motivo <> \"\" then\n    escreve(\"// Atenção: \" + motivo);\nend\n";
+
+    if (chart) code += sceGraficoRaiz(m, metodoSlug(m));
+    return code;
+  }
+
   function buildScilabCode(){
     if (!lastComputation) return "";
     if (state.method === "bissecao") return buildScilabCodeBissecao();
+    if (state.method === "falsapos" || state.method === "pontofixo" || state.method === "newton") return buildScilabCodeRaiz();
     if (state.method === "gauss") return buildScilabCodeGauss();
     if (state.method === "lu") return buildScilabCodeLu();
     if (state.method === "seidel") return buildScilabCodeSeidel();
@@ -4556,7 +5468,7 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
   });
 
   document.getElementById("btnScilabDownload").addEventListener("click", async function(){
-    var nomeMetodo = state.method === "bissecao" ? "bissecao" : state.method === "gauss" ? "gauss-jordan" : state.method === "lu" ? "fatoracao-lu" : state.method === "seidel" ? "gauss-seidel" : "jacobi";
+    var nomeMetodo = state.method === "gauss" ? "gauss-jordan" : metodoSlug(state.method);
     var filename = nomeMetodo + ".sce";
     var blob = new Blob([scilabCodeAreaEl.value], {type:"text/plain"});
     try{
@@ -4782,10 +5694,10 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
     });
     document.querySelector('input[name="method"][value="'+state.method+'"]').checked = true;
     document.getElementById("jacobiParams").style.display = (state.method === "jacobi" || state.method === "seidel") ? "flex" : "none";
-    document.getElementById("bisectionParams").style.display = state.method === "bissecao" ? "flex" : "none";
+    document.getElementById("bisectionParams").style.display = isRoot(state.method) ? "flex" : "none";
     document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
-    document.getElementById("colsField").style.display = state.method === "bissecao" ? "none" : "flex";
-    document.getElementById("dimsPanel").classList.toggle("dims-full", state.method === "bissecao");
+    document.getElementById("colsField").style.display = isRoot(state.method) ? "none" : "flex";
+    document.getElementById("dimsPanel").classList.toggle("dims-full", isRoot(state.method));
     syncDimsHint(state.method);
     document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("rowsVal").textContent = state.rows;
@@ -4806,12 +5718,12 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
     chkConvEl.checked = !!state.checkConv;
     chkEncurtarEl.checked = !!state.encurtar;
     document.getElementById("bisFunction").value = state.bisFunction || "";
-    document.getElementById("bisA").value = state.bisA !== undefined ? state.bisA : 2;
-    document.getElementById("bisB").value = state.bisB !== undefined ? state.bisB : 3;
+    document.getElementById("bisA").value = state.bisA === undefined ? 2 : (ivBlank(state.bisA) ? "" : state.bisA);
+    document.getElementById("bisB").value = state.bisB === undefined ? 3 : (ivBlank(state.bisB) ? "" : state.bisB);
     document.getElementById("bisNumIter").value = state.bisNumIter || 5;
     document.getElementById("bisTolerance").value = state.bisTolerance || 0.001;
     document.querySelectorAll("input[name='bisStopMode']").forEach(function(r){r.checked=r.value===(state.bisStopMode||"iter");});
-    syncBisControls();
+    syncBisControls(); pushRootDom(); syncRootFields();
     buildEditor();
     render();
   }
