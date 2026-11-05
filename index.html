@@ -528,6 +528,10 @@
       <input type="radio" name="method" value="newton">
       <span class="mo-text"><b>Newton</b></span>
     </label>
+    <label class="method-opt" data-method="integracao">
+      <input type="radio" name="method" value="integracao">
+      <span class="mo-text"><b>Integração Numérica</b></span>
+    </label>
   </div>
 
   <div class="layout">
@@ -575,6 +579,33 @@
               </div>
             </div>
             <div class="hint" id="dimsHint">A última coluna é o vetor b. Máximo: 6×6.</div>
+
+            <div id="integParams" class="bisection-config" style="display:none;">
+              <div class="function-field">
+                <label for="intFunction">Função f(x)</label>
+                <input class="function-input" id="intFunction" type="text" spellcheck="false" placeholder="ex.: x^2 + sin(x)">
+                <div class="hint">Mesma sintaxe do Newton: x, +, −, *, /, ^, ln(x), sin(x), cos(x), sqrt(x), e^x.</div>
+              </div>
+              <div class="interval-grid">
+                <div class="field-row"><label for="intA">a (limite inferior)</label>
+                  <input type="number" class="param" id="intA" step="any" value="0"></div>
+                <div class="field-row"><label for="intB">b (limite superior)</label>
+                  <input type="number" class="param" id="intB" step="any" value="1"></div>
+              </div>
+              <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="intN">Subintervalos (n)</label>
+                <input type="number" class="param" id="intN" min="1" max="200" step="1" value="4" style="width:100%;">
+                <div class="hint" id="intNHint">Máximo: 200.</div>
+              </div>
+              <div class="field-row" id="integRuleRow" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="intRule">Regra</label>
+                <select class="param" id="intRule" size="3" style="width:100%;height:auto;">
+                  <option value="trap">Trapézio composto</option>
+                  <option value="13">Simpson 1/3 (n par)</option>
+                  <option value="38">Simpson 3/8 (n múltiplo de 3)</option>
+                </select>
+              </div>
+            </div>
 
             <div id="bisectionParams" class="bisection-config" style="display:none;">
               <div class="function-field">
@@ -815,6 +846,7 @@
     bisFunction: "x^3 - 2*x - 5", bisA: 2, bisB: 3, bisNumIter: 5,
     bisStopMode: "iter", bisTolerance: 0.001, bisChartOn: false,
     rootPhi: "(2*x+5)^(1/3)", rootX0: 2, rootDeriv: "",
+    intFunction: "x^2", intA: 0, intB: 1, intN: 4, intRule: "trap",
     headerOn: false, headerName: "", headerQuestion: "",
     scilabChartOn: false,
     checkConv: false,
@@ -878,6 +910,8 @@
       if (!raw) return false;
       var parsed = JSON.parse(raw);
       Object.assign(state, parsed);
+      if (state.method === "trapezio"){ state.method = "integracao"; state.intRule = "trap"; }
+      else if (state.method === "simpson"){ state.method = "integracao"; if (state.intRule === "trap") state.intRule = "13"; }
       return true;
     }catch(e){ return false; }
   }
@@ -1284,7 +1318,7 @@
   function rootIsInterval(m){ return m==="bissecao" || m==="falsapos"; }
   function metodoSlug(m){
     return ({gauss:"escalonamento", lu:"fatoracao-lu", seidel:"gauss-seidel", jacobi:"jacobi",
-             bissecao:"bissecao", falsapos:"posicao-falsa", pontofixo:"ponto-fixo", newton:"newton"})[m] || "jacobi";
+             bissecao:"bissecao", falsapos:"posicao-falsa", pontofixo:"ponto-fixo", newton:"newton", integracao:"integracao-numerica"})[m] || "jacobi";
   }
 
   // ---------- Derivada simbólica automática (para o método de Newton) ----------
@@ -2048,6 +2082,11 @@
     wrap.innerHTML = "";
     var caption = document.getElementById("matrixCaption");
 
+    if (isInteg(state.method)){
+      document.getElementById("matrixHead").textContent = "INTEGRAÇÃO NUMÉRICA";
+      caption.textContent = "";
+      return;
+    }
     if (isRoot(state.method)){
       document.getElementById("matrixHead").textContent = {bissecao:"BISSEÇÃO", falsapos:"POSIÇÃO FALSA", pontofixo:"PONTO FIXO", newton:"MÉTODO DE NEWTON"}[state.method];
       caption.textContent = rootIsInterval(state.method)
@@ -2938,6 +2977,7 @@ if rhoOk then
   }
 
   function render(){
+    if (isInteg(state.method)){ renderInteg(); return; }
     document.getElementById("stepsHead").textContent =
       state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
       state.method === "lu" ? "PASSO A PASSO — FATORAÇÃO LU" :
@@ -3035,6 +3075,166 @@ if rhoOk then
     h.style.display = (m === "gauss" || isRoot(m)) ? "" : "none";
   }
 
+  // ---------- Integração numérica: Trapézio composto e Simpson (1/3 e 3/8) ----------
+  function isInteg(m){ return m === "integracao"; }
+  function integRule(){ return state.intRule === "13" ? "s13" : state.intRule === "38" ? "s38" : "trap"; }
+  function syncInteg(){
+    var on = isInteg(state.method);
+    document.getElementById("integParams").style.display = on ? "flex" : "none";
+    if (on){ document.getElementById("dimsPanel").classList.add("dims-full"); document.getElementById("rowsField").style.display = "none"; document.getElementById("colsField").style.display = "none"; }
+    var dh = document.getElementById("dimsHint"); if (dh && on) dh.style.display = "none"; else if (dh) dh.style.display = "";
+    document.getElementById("intFunction").value = state.intFunction || "";
+    document.getElementById("intA").value = state.intA;
+    document.getElementById("intB").value = state.intB;
+    document.getElementById("intN").value = state.intN;
+    document.getElementById("intRule").value = state.intRule;
+  }
+  (function bindInteg(){
+    function num(sv){ sv = String(sv).trim(); return (sv !== "" && isFinite(Number(sv))) ? Number(sv) : null; }
+    function on(id, key, parse, evt){
+      document.getElementById(id).addEventListener(evt || "input", function(){
+        var v = parse(this.value); if (v === null) return;
+        state[key] = v; saveLocal(); if (isInteg(state.method)) render();
+      });
+    }
+    on("intFunction", "intFunction", function(v){ return v; });
+    on("intA", "intA", num); on("intB", "intB", num); on("intN", "intN", num);
+    on("intRule", "intRule", function(v){ return v; }, "change");
+  })();
+  function renderInteg(){
+    var rule = integRule(), body = document.getElementById("stepsBody");
+    var nome = {trap:"TRAPÉZIO COMPOSTO", s13:"SIMPSON 1/3", s38:"SIMPSON 3/8"}[rule];
+    document.getElementById("stepsHead").textContent = "PASSO A PASSO — " + nome;
+    document.getElementById("matrixHead").textContent = nome;
+    document.getElementById("matrixCaption").textContent = "";
+    lastComputation = null;
+    ["btnPdfScilab","btnPreviewOne","btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = true; });
+    var ph = document.getElementById("pdfHint"); if (ph) ph.textContent = "Digite uma função e limites válidos para habilitar o download.";
+    body.innerHTML = "";
+    function fail(msg){
+      var d = document.createElement("div"); d.className = "final-box";
+      d.innerHTML = "<h3>Não foi possível calcular</h3><div style='font-size:12.5px'></div>";
+      d.lastChild.textContent = msg; body.appendChild(d);
+    }
+    var a = Number(state.intA), b = Number(state.intB), n = Number(state.intN);
+    if (!String(state.intFunction || "").trim()) return fail("Digite a função f(x).");
+    if (!isFinite(a) || !isFinite(b) || a === b) return fail("Informe limites a e b diferentes.");
+    if (!isFinite(n) || n < 1 || Math.floor(n) !== n || n > 200) return fail("n deve ser um inteiro entre 1 e 200.");
+    if (rule === "s13" && n % 2) return fail("Simpson 1/3 exige n par. Tente n = " + (n + 1) + " ou n = " + (n - 1 || 2) + ".");
+    if (rule === "s38" && n % 3) return fail("Simpson 3/8 exige n múltiplo de 3. Tente n = " + (n + (3 - n % 3)) + (n > 3 ? " ou n = " + (n - n % 3) : "") + ".");
+    var f; try{ f = makeFunction(state.intFunction); }catch(e){ return fail(e.message || "Função inválida."); }
+    var h = (b - a) / n, rows = [], S = 0;
+    for (var i = 0; i <= n; i++){
+      var x = a + i * h, fx = f(x);
+      if (!isFinite(fx)) return fail("f(x) não está definida em x = " + bisFmt(x) + ".");
+      var c = (i === 0 || i === n) ? 1 :
+              rule === "trap" ? 2 :
+              rule === "s13" ? (i % 2 ? 4 : 2) :
+              (i % 3 ? 3 : 2);
+      rows.push({i:i, x:x, fx:fx, c:c, cf:c * fx}); S += c * fx;
+    }
+    var mult = rule === "trap" ? h / 2 : rule === "s13" ? h / 3 : 3 * h / 8;
+    var I = mult * S;
+    try{
+      lastComputation = {method:"integracao", run: integRunFor(state)};
+      ["btnPdfScilab","btnPreviewOne","btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = false; });
+      var ph2 = document.getElementById("pdfHint"); if (ph2) ph2.textContent = "Função válida: Visualizar, Baixar PDF e Código Scilab (.sce) estão disponíveis.";
+    }catch(e){ lastComputation = null; }
+    var sum = document.createElement("div"); sum.className = "bis-summary";
+    [["h = (b − a)/n", bisFmt(h)], ["Σ cᵢ·f(xᵢ)", bisFmt(S)], ["Integral ≈", bisFmt(I)]].forEach(function(v){
+      var d = document.createElement("div"); d.className = "bis-stat";
+      d.innerHTML = "<small>" + v[0] + "</small><strong>" + v[1] + "</strong>"; sum.appendChild(d);
+    });
+    body.appendChild(sum);
+    var fm = {trap:"I ≈ (h/2)·[f(x₀) + 2f(x₁) + … + 2f(xₙ₋₁) + f(xₙ)]",
+              s13:"I ≈ (h/3)·[f(x₀) + 4f(x₁) + 2f(x₂) + 4f(x₃) + … + 4f(xₙ₋₁) + f(xₙ)]",
+              s38:"I ≈ (3h/8)·[f(x₀) + 3f(x₁) + 3f(x₂) + 2f(x₃) + 3f(x₄) + … + 3f(xₙ₋₁) + f(xₙ)]"}[rule];
+    var note = document.createElement("div"); note.className = "hint"; note.style.margin = "0 0 9px";
+    note.textContent = fm + ", com xᵢ = a + i·h."; body.appendChild(note);
+    var w = document.createElement("div"); w.className = "bis-table-wrap";
+    var t = document.createElement("table"); t.className = "bis-table-grid"; t.style.minWidth = "0";
+    var hr = document.createElement("tr");
+    ["i","xᵢ","f(xᵢ)","cᵢ","cᵢ·f(xᵢ)"].forEach(function(x){ var th = document.createElement("th"); th.textContent = x; hr.appendChild(th); });
+    t.appendChild(hr);
+    rows.forEach(function(r){
+      var tr = document.createElement("tr");
+      [String(r.i), bisFmt(r.x), bisFmt(r.fx), String(r.c), bisFmt(r.cf)].forEach(function(v){
+        var td = document.createElement("td"); td.textContent = v; tr.appendChild(td);
+      });
+      t.appendChild(tr);
+    });
+    w.appendChild(t); body.appendChild(w);
+    var fb = document.createElement("div"); fb.className = "final-box"; fb.style.marginTop = "10px";
+    var mtxt = rule === "trap" ? "h/2" : rule === "s13" ? "h/3" : "3h/8";
+    fb.innerHTML = "<h3>Resultado</h3><div style='font-size:13px'></div>";
+    fb.lastChild.textContent = "I ≈ (" + mtxt + ")·Σ = " + bisFmt(mult) + " × " + bisFmt(S) + " = " + bisFmt(I);
+    body.appendChild(fb);
+  }
+
+  function integCoef(rule, i, n){
+    if (i === 0 || i === n) return 1;
+    return rule === "trap" ? 2 : rule === "s13" ? (i % 2 ? 4 : 2) : (i % 3 ? 3 : 2);
+  }
+  function integRuleName(rule){ return {trap:"Trapézio composto", s13:"Simpson 1/3", s38:"Simpson 3/8"}[rule]; }
+  function integRunFor(st){
+    var rule = st.intRule === "13" ? "s13" : st.intRule === "38" ? "s38" : "trap";
+    var a = Number(st.intA), b = Number(st.intB), n = Number(st.intN);
+    if (!String(st.intFunction || "").trim()) throw new Error("Digite a função f(x).");
+    if (!isFinite(a) || !isFinite(b) || a === b) throw new Error("Informe limites a e b diferentes.");
+    if (!isFinite(n) || n < 1 || Math.floor(n) !== n || n > 200) throw new Error("n deve ser um inteiro entre 1 e 200.");
+    if (rule === "s13" && n % 2) throw new Error("Simpson 1/3 exige n par.");
+    if (rule === "s38" && n % 3) throw new Error("Simpson 3/8 exige n múltiplo de 3.");
+    var f = makeFunction(st.intFunction), h = (b - a) / n, S = 0;
+    for (var i = 0; i <= n; i++){
+      var fx = f(a + i * h);
+      if (!isFinite(fx)) throw new Error("f(x) não está definida em x = " + bisFmt(a + i * h) + ".");
+      S += integCoef(rule, i, n) * fx;
+    }
+    var mult = rule === "trap" ? h / 2 : rule === "s13" ? h / 3 : 3 * h / 8;
+    return {rule:rule, a:a, b:b, n:n, h:h, S:S, mult:mult, I:mult * S};
+  }
+  // "f(x0) + 4f(x1) + 2f(x2) + ... + f(x6)" — abreviado quando n é grande
+  function integSomaTexto(rule, n){
+    var t = [];
+    for (var i = 0; i <= n; i++){ var c = integCoef(rule, i, n); t.push((c === 1 ? "" : c) + "f(x" + i + ")"); }
+    if (t.length > 7) t = t.slice(0, 4).concat(["..."], t.slice(-2));
+    return t.join(" + ");
+  }
+  function integTextLines(st, run){
+    var mt = run.rule === "trap" ? "h/2" : run.rule === "s13" ? "h/3" : "3h/8";
+    return [
+      "f(x) = " + st.intFunction,
+      "a = " + bisFmt(run.a) + "   b = " + bisFmt(run.b) + "   n = " + run.n,
+      "Regra: " + integRuleName(run.rule),
+      "h = (b - a)/n = " + bisFmt(run.h),
+      "Soma = " + integSomaTexto(run.rule, run.n) + " = " + bisFmt(run.S),
+      "I = (" + mt + ") * Soma = " + bisFmt(run.mult) + " * " + bisFmt(run.S) + " = " + bisFmt(run.I)
+    ];
+  }
+  function buildScilabCodeInteg(){
+    if (!lastComputation || lastComputation.method !== "integracao") return "";
+    var st = state, run = lastComputation.run;
+    var mtS = run.rule === "trap" ? "h/2" : run.rule === "s13" ? "h/3" : "3*h/8";
+    var mtT = run.rule === "trap" ? "h/2" : run.rule === "s13" ? "h/3" : "3h/8";
+    var coef = run.rule === "trap" ? "    if i == 0 | i == n then\n        c = 1;\n    else\n        c = 2;\n    end\n" :
+               run.rule === "s13" ? "    if i == 0 | i == n then\n        c = 1;\n    elseif modulo(i, 2) == 1 then\n        c = 4;\n    else\n        c = 2;\n    end\n" :
+               "    if i == 0 | i == n then\n        c = 1;\n    elseif modulo(i, 3) == 0 then\n        c = 2;\n    else\n        c = 3;\n    end\n";
+    var L = integTextLines(st, run);
+    var code = SCE_HEADER + SCE_HELP_BASE + SCE_HELP_FNUM8;
+    code += "function y = f(x)\n    y = " + bisExprToScilab(st.intFunction) + ";\nendfunction\n\n";
+    code += "a = " + fmtScilab(run.a) + ";\nb = " + fmtScilab(run.b) + ";\nn = " + run.n + "; // número de subintervalos\n\n";
+    code += sceCabecalho();
+    code += sceEscreve(L[0]);
+    code += "escreve(msprintf(\"a = %s   b = %s   n = %d\", fnum8(a), fnum8(b), n));\n";
+    code += sceEscreve(L[2]);
+    code += "h = (b - a) / n;\nescreve(\"h = (b - a)/n = \" + fnum8(h));\n";
+    code += "S = 0;\nfor i = 0:n\n    x = a + i*h;\n" + coef + "    S = S + c*f(x);\nend\n";
+    code += "escreve(\"Soma = " + integSomaTexto(run.rule, run.n) + " = \" + fnum8(S));\n";
+    code += "I = (" + mtS + ") * S;\n";
+    code += "escreve(\"I = (" + mtT + ") * Soma = \" + fnum8(" + mtS + ") + \" * \" + fnum8(S) + \" = \" + fnum8(I));\n";
+    return code;
+  }
+
   function setMethod(m){
     var prev = state.method;
     if (prev === "gauss" && m !== "gauss" && state.A && state.A.length) converterParaQuadrado();
@@ -3049,6 +3249,7 @@ if rhoOk then
     document.getElementById("colsField").style.display = isRoot(m) ? "none" : "flex";
     document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("dimsPanel").classList.toggle("dims-full", isRoot(m));
+    syncInteg();
     syncDimsHint(m); syncRootFields();
     if (m !== "gauss"){ document.getElementById("colsVal").textContent = state.jn; }
     else { document.getElementById("colsVal").textContent = state.cols; document.getElementById("rowsVal").textContent = state.rows; }
@@ -3778,7 +3979,9 @@ if rhoOk then
       line("// "+questionTitle);
       blank(7);
 
-      if (isRoot(comp.method)){
+      if (isInteg(comp.method)){
+        integTextLines(st, comp.run).forEach(function(l){ line(l); });
+      } else if (isRoot(comp.method)){
         var br = comp.run;
         rootHeaderLines(st).forEach(function(l){ line(l); });
         blank(6);
@@ -3989,7 +4192,9 @@ if rhoOk then
       push("// "+questionTitle);
       blankLine();
 
-      if (isRoot(comp.method)){
+      if (isInteg(comp.method)){
+        integTextLines(st, comp.run).forEach(function(l){ push(l); });
+      } else if (isRoot(comp.method)){
         var br = comp.run;
         rootHeaderLines(st).forEach(function(l){ push(l); });
         blankLine();
@@ -4306,6 +4511,7 @@ if rhoOk then
   function computeFor(st){
     // A bisseção não usa matriz A/b: recalculamos diretamente a partir da
     // função, intervalo e critério que foram salvos junto com a questão.
+    if (isInteg(st.method)) return {method:"integracao", run: integRunFor(st)};
     if (isRoot(st.method)) return {method: st.method, run: rootRunFor(st)};
     if (st.method === "lu") return {method:"lu", run: luSteps(st.A, st.b)};
     if (st.method === "gauss") return {method:"gauss", steps: gaussJordanSteps(st.A)};
@@ -4316,7 +4522,7 @@ if rhoOk then
   }
 
   function savedTitle(st){ return st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão"; }
-  function savedMethodName(st){ return st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : st.method === "falsapos" ? "Posição Falsa" : st.method === "pontofixo" ? "Ponto Fixo" : st.method === "newton" ? "Newton" : "Jacobi"))); }
+  function savedMethodName(st){ return st.method === "integracao" ? "Integração Numérica" : st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : st.method === "falsapos" ? "Posição Falsa" : st.method === "pontofixo" ? "Ponto Fixo" : st.method === "newton" ? "Newton" : "Jacobi"))); }
 
   function renderSaved(){
     var panel = document.getElementById("savedPanel");
@@ -5431,6 +5637,7 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
 
   function buildScilabCode(){
     if (!lastComputation) return "";
+    if (state.method === "integracao") return buildScilabCodeInteg();
     if (state.method === "bissecao") return buildScilabCodeBissecao();
     if (state.method === "falsapos" || state.method === "pontofixo" || state.method === "newton") return buildScilabCodeRaiz();
     if (state.method === "gauss") return buildScilabCodeGauss();
@@ -5698,6 +5905,7 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
     document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
     document.getElementById("colsField").style.display = isRoot(state.method) ? "none" : "flex";
     document.getElementById("dimsPanel").classList.toggle("dims-full", isRoot(state.method));
+    syncInteg();
     syncDimsHint(state.method);
     document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("rowsVal").textContent = state.rows;
