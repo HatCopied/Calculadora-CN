@@ -581,18 +581,30 @@
             <div class="hint" id="dimsHint">A última coluna é o vetor b. Máximo: 6×6.</div>
 
             <div id="integParams" class="bisection-config" style="display:none;">
-              <div class="function-field">
+              <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="intMode">Entrada</label>
+                <select class="param" id="intMode" style="width:100%;">
+                  <option value="func">Função f(x)</option>
+                  <option value="table">Tabela de pontos (x e f(x))</option>
+                </select>
+              </div>
+              <div class="function-field" id="intFuncField">
                 <label for="intFunction">Função f(x)</label>
                 <input class="function-input" id="intFunction" type="text" spellcheck="false" placeholder="ex.: x^2 + sin(x)">
                 <div class="hint">Mesma sintaxe do Newton: x, +, −, *, /, ^, ln(x), sin(x), cos(x), sqrt(x), e^x.</div>
               </div>
-              <div class="interval-grid">
+              <div class="function-field" id="intTableField" style="display:none;">
+                <label for="intTable">Pontos (um par x f(x) por linha)</label>
+                <textarea class="function-input" id="intTable" rows="6" spellcheck="false" placeholder="0 0&#10;1 0,693&#10;2 1,1&#10;3 1,387&#10;4 1,61" style="resize:vertical;"></textarea>
+                <div class="hint">Separe x e f(x) com espaço, tab ou ponto e vírgula. Vírgula decimal é aceita. Os x precisam ser igualmente espaçados e n = nº de pontos − 1.</div>
+              </div>
+              <div class="interval-grid" id="intLimits">
                 <div class="field-row"><label for="intA">a (limite inferior)</label>
                   <input type="number" class="param" id="intA" step="any" value="0"></div>
                 <div class="field-row"><label for="intB">b (limite superior)</label>
                   <input type="number" class="param" id="intB" step="any" value="1"></div>
               </div>
-              <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+              <div class="field-row" id="intNField" style="flex-direction:column;align-items:flex-start;gap:5px;">
                 <label for="intN">Subintervalos (n)</label>
                 <input type="number" class="param" id="intN" min="1" max="200" step="1" value="4" style="width:100%;">
                 <div class="hint" id="intNHint">Máximo: 200.</div>
@@ -604,6 +616,16 @@
                   <option value="13">Simpson 1/3 (n par)</option>
                   <option value="38">Simpson 3/8 (n múltiplo de 3)</option>
                 </select>
+              </div>
+              <div class="field-row" id="intEpsField" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="intEps">Erro máximo permitido ε (opcional)</label>
+                <input type="text" class="function-input" id="intEps" spellcheck="false" placeholder="ex.: 0,0001 ou 1e-4">
+                <div class="hint">Preencha para descobrir quantas aplicações (n) garantem o erro. Vazio mostra só o limitante do erro para o n atual.</div>
+              </div>
+              <div class="field-row" id="intMField" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="intM">M (opcional)</label>
+                <input type="text" class="function-input" id="intM" spellcheck="false" placeholder="vazio = estimado automaticamente">
+                <div class="hint">Máximo de |f″(x)| (trapézio) ou |f⁗(x)| (Simpson) em [a, b]. Use se quiser o valor da sua derivação à mão.</div>
               </div>
             </div>
 
@@ -846,7 +868,7 @@
     bisFunction: "x^3 - 2*x - 5", bisA: 2, bisB: 3, bisNumIter: 5,
     bisStopMode: "iter", bisTolerance: 0.001, bisChartOn: false,
     rootPhi: "(2*x+5)^(1/3)", rootX0: 2, rootDeriv: "",
-    intFunction: "x^2", intA: 0, intB: 1, intN: 4, intRule: "trap",
+    intFunction: "x^2", intA: 0, intB: 1, intN: 4, intRule: "trap", intMode: "func", intTable: "", intEps: "", intM: "",
     headerOn: false, headerName: "", headerQuestion: "",
     scilabChartOn: false,
     checkConv: false,
@@ -3078,16 +3100,31 @@ if rhoOk then
   // ---------- Integração numérica: Trapézio composto e Simpson (1/3 e 3/8) ----------
   function isInteg(m){ return m === "integracao"; }
   function integRule(){ return state.intRule === "13" ? "s13" : state.intRule === "38" ? "s38" : "trap"; }
+  function integRuleOf(st){ return st.intRule === "13" ? "s13" : st.intRule === "38" ? "s38" : "trap"; }
+  function integVisibility(){
+    var table = state.intMode === "table";
+    document.getElementById("intFuncField").style.display = table ? "none" : "";
+    document.getElementById("intTableField").style.display = table ? "" : "none";
+    document.getElementById("intLimits").style.display = table ? "none" : "";
+    document.getElementById("intNField").style.display = table ? "none" : "";
+    document.getElementById("intEpsField").style.display = table ? "none" : "flex";
+    document.getElementById("intMField").style.display = table ? "none" : "flex";
+  }
   function syncInteg(){
     var on = isInteg(state.method);
     document.getElementById("integParams").style.display = on ? "flex" : "none";
     if (on){ document.getElementById("dimsPanel").classList.add("dims-full"); document.getElementById("rowsField").style.display = "none"; document.getElementById("colsField").style.display = "none"; }
     var dh = document.getElementById("dimsHint"); if (dh && on) dh.style.display = "none"; else if (dh) dh.style.display = "";
+    document.getElementById("intMode").value = state.intMode === "table" ? "table" : "func";
     document.getElementById("intFunction").value = state.intFunction || "";
+    document.getElementById("intTable").value = state.intTable || "";
+    document.getElementById("intEps").value = state.intEps || "";
+    document.getElementById("intM").value = state.intM || "";
     document.getElementById("intA").value = state.intA;
     document.getElementById("intB").value = state.intB;
     document.getElementById("intN").value = state.intN;
     document.getElementById("intRule").value = state.intRule;
+    integVisibility();
   }
   (function bindInteg(){
     function num(sv){ sv = String(sv).trim(); return (sv !== "" && isFinite(Number(sv))) ? Number(sv) : null; }
@@ -3097,10 +3134,260 @@ if rhoOk then
         state[key] = v; saveLocal(); if (isInteg(state.method)) render();
       });
     }
-    on("intFunction", "intFunction", function(v){ return v; });
+    function txt(v){ return v; }
+    on("intFunction", "intFunction", txt);
+    on("intTable", "intTable", txt);
+    on("intEps", "intEps", txt);
+    on("intM", "intM", txt);
     on("intA", "intA", num); on("intB", "intB", num); on("intN", "intN", num);
-    on("intRule", "intRule", function(v){ return v; }, "change");
+    on("intRule", "intRule", txt, "change");
+    document.getElementById("intMode").addEventListener("change", function(){
+      state.intMode = this.value === "table" ? "table" : "func";
+      integVisibility(); saveLocal(); if (isInteg(state.method)) render();
+    });
   })();
+
+  // número digitado pelo aluno (aceita vírgula decimal); null se vazio ou inválido
+  function integNum(s){
+    var t = String(s == null ? "" : s).trim().replace(",", ".");
+    if (t === "") return null;
+    var v = Number(t); return isFinite(v) ? v : null;
+  }
+  function integParseTable(txt){
+    var rows = [], lines = String(txt || "").split(/\r?\n/);
+    for (var i = 0; i < lines.length; i++){
+      var l = lines[i].trim(); if (!l) continue;
+      var parts = l.split(/[;\t ]+/).filter(Boolean);
+      if (parts.length !== 2) throw new Error("Linha " + (i + 1) + ": use o formato  x  f(x).");
+      var x = integNum(parts[0]), y = integNum(parts[1]);
+      if (x === null || y === null) throw new Error("Linha " + (i + 1) + ": valor inválido.");
+      rows.push([x, y]);
+    }
+    if (rows.length < 2) throw new Error("Informe pelo menos 2 pontos.");
+    rows.sort(function(p, q){ return p[0] - q[0]; });
+    return rows;
+  }
+  function integCoef(rule, i, n){
+    if (i === 0 || i === n) return 1;
+    return rule === "trap" ? 2 : rule === "s13" ? (i % 2 ? 4 : 2) : (i % 3 ? 3 : 2);
+  }
+  function integRuleName(rule){ return {trap:"Trapézio composto", s13:"Simpson 1/3", s38:"Simpson 3/8"}[rule]; }
+
+  // valida a entrada e faz a conta da regra escolhida (sem valor exato nem erro)
+  function integCompute(st){
+    var rule = integRuleOf(st), table = st.intMode === "table";
+    var xs = [], fs = [], a, b, n, h, f = null;
+    if (table){
+      var tr = integParseTable(st.intTable);
+      n = tr.length - 1; a = tr[0][0]; b = tr[n][0]; h = (b - a) / n;
+      if (n > 200) throw new Error("A tabela pode ter no máximo 201 pontos (n = 200).");
+      if (!(h > 0)) throw new Error("Os valores de x precisam ser todos diferentes.");
+      for (var k = 0; k <= n; k++){
+        if (Math.abs(tr[k][0] - (a + k * h)) > 1e-9 * Math.max(1, Math.abs(b - a))) throw new Error("Os valores de x precisam ser igualmente espaçados (passo h constante).");
+        xs.push(tr[k][0]); fs.push(tr[k][1]);
+      }
+      if (rule === "s13" && n % 2) throw new Error("Simpson 1/3 exige n par, ou seja, um número ímpar de pontos. Sua tabela tem " + (n + 1) + " pontos (n = " + n + ").");
+      if (rule === "s38" && n % 3) throw new Error("Simpson 3/8 exige n múltiplo de 3. Sua tabela tem " + (n + 1) + " pontos (n = " + n + ").");
+    } else {
+      a = Number(st.intA); b = Number(st.intB); n = Number(st.intN);
+      if (!String(st.intFunction || "").trim()) throw new Error("Digite a função f(x).");
+      if (!isFinite(a) || !isFinite(b) || a === b) throw new Error("Informe limites a e b diferentes.");
+      if (!isFinite(n) || n < 1 || Math.floor(n) !== n || n > 200) throw new Error("n deve ser um inteiro entre 1 e 200.");
+      if (rule === "s13" && n % 2) throw new Error("Simpson 1/3 exige n par. Tente n = " + (n + 1) + " ou n = " + (n - 1 || 2) + ".");
+      if (rule === "s38" && n % 3) throw new Error("Simpson 3/8 exige n múltiplo de 3. Tente n = " + (n + (3 - n % 3)) + (n > 3 ? " ou n = " + (n - n % 3) : "") + ".");
+      f = makeFunction(st.intFunction); h = (b - a) / n;
+      for (var j = 0; j <= n; j++){
+        var xj = a + j * h, fj = f(xj);
+        if (!isFinite(fj)) throw new Error("f(x) não está definida em x = " + bisFmt(xj) + ".");
+        xs.push(xj); fs.push(fj);
+      }
+    }
+    var rows = [], S = 0;
+    for (var i = 0; i <= n; i++){
+      var c = integCoef(rule, i, n);
+      rows.push({i:i, x:xs[i], fx:fs[i], c:c, cf:c * fs[i]}); S += c * fs[i];
+    }
+    var mult = rule === "trap" ? h / 2 : rule === "s13" ? h / 3 : 3 * h / 8;
+    return {rule:rule, mode:table ? "table" : "func", a:a, b:b, n:n, h:h, S:S, mult:mult, I:mult * S, rows:rows, f:f};
+  }
+
+  // ---- valor exato: antiderivadas básicas; senão, referência numérica de alta precisão ----
+  function integAntiderivative(expr, a, b){
+    var s = String(expr || "").toLowerCase().replace(/\s+/g, "").replace(/\u2212/g, "-").replace(/\*\*/g, "^");
+    if (!s) return null;
+    var NUM = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)", CO = "(-?(?:" + NUM + ")?)", m;
+    function co(g){ return (g === undefined || g === "") ? 1 : g === "-" ? -1 : Number(g); }
+    function r(v){ return String(+Number(v).toPrecision(10)); }
+    function pref(cv){ return cv === 1 ? "" : cv === -1 ? "-" : r(cv) + "*"; }
+    function done(text, F){
+      var v; try{ v = F(b) - F(a); }catch(e){ return null; }
+      return isFinite(v) ? {text:text, value:v} : null;
+    }
+    var res;
+    // polinômios: soma de termos c*x^k
+    if (/^[0-9x+\-*.^]+$/.test(s) && s.indexOf("^-") < 0 && s.indexOf("*-") < 0){
+      var terms = s.replace(/-/g, "+-").split("+").filter(function(t){ return t !== ""; }), ok = terms.length > 0, T = [];
+      terms.forEach(function(t){
+        var mm = t.match(new RegExp("^(-?)(" + NUM + ")?\\*?x(?:\\^(" + NUM + "))?$"));
+        if (mm){ T.push({c:(mm[1] ? -1 : 1) * (mm[2] === undefined ? 1 : Number(mm[2])), k:mm[3] === undefined ? 1 : Number(mm[3])}); return; }
+        mm = t.match(new RegExp("^(-?" + NUM + ")$"));
+        if (mm){ T.push({c:Number(mm[1]), k:0}); return; }
+        ok = false;
+      });
+      if (ok){
+        var txt = T.map(function(t){
+          var k1 = t.k + 1;
+          return pref(t.c) + "x" + (k1 === 1 ? "" : "^" + r(k1)) + (k1 === 1 ? "" : "/" + r(k1));
+        }).join(" + ").replace(/\+ -/g, "- ");
+        res = done(txt, function(x){ var tot = 0; T.forEach(function(t){ tot += t.c / (t.k + 1) * Math.pow(x, t.k + 1); }); return tot; });
+        if (res) return res;
+      }
+    }
+    if ((m = s.match(new RegExp("^(-?" + NUM + ")/x$"))) && a * b > 0){
+      var c1 = Number(m[1]);
+      res = done(pref(c1) + "ln|x|", function(x){ return c1 * Math.log(Math.abs(x)); }); if (res) return res;
+    }
+    if ((m = s.match(new RegExp("^(-?" + NUM + ")/(?:sqrt|raiz)\\(x\\)$")))){
+      var c2 = Number(m[1]);
+      res = done(r(2 * c2) + "*sqrt(x)", function(x){ return 2 * c2 * Math.sqrt(x); }); if (res) return res;
+    }
+    if ((m = s.match(new RegExp("^" + CO + "\\*?(?:sqrt|raiz)\\(x\\)$")))){
+      var c3 = co(m[1]);
+      res = done(pref(c3) + "(2/3)*x^(3/2)", function(x){ return c3 * (2 / 3) * Math.pow(x, 1.5); }); if (res) return res;
+    }
+    if ((m = s.match(new RegExp("^" + CO + "\\*?(?:e\\^|exp)\\(?" + CO + "\\*?x\\)?$")))){
+      var c4 = co(m[1]), k4 = co(m[2]);
+      if (k4 !== 0){
+        res = done(pref(c4 / k4) + "e^(" + (k4 === 1 ? "x" : k4 === -1 ? "-x" : r(k4) + "*x") + ")", function(x){ return c4 / k4 * Math.exp(k4 * x); }); if (res) return res;
+      }
+    }
+    if ((m = s.match(new RegExp("^" + CO + "\\*?(sin|sen|cos)\\(?" + CO + "\\*?x\\)?$")))){
+      var c5 = co(m[1]), k5 = co(m[3]), isCos = m[2] === "cos";
+      if (k5 !== 0){
+        var arg = k5 === 1 ? "x" : k5 === -1 ? "-x" : r(k5) + "*x";
+        res = done(pref(isCos ? c5 / k5 : -c5 / k5) + (isCos ? "sin(" : "cos(") + arg + ")",
+          function(x){ return isCos ? c5 / k5 * Math.sin(k5 * x) : -c5 / k5 * Math.cos(k5 * x); });
+        if (res) return res;
+      }
+    }
+    if ((m = s.match(new RegExp("^" + CO + "\\*?ln\\(x\\)$"))) && a > 0 && b > 0){
+      var c6 = co(m[1]);
+      res = done(pref(c6) + "(x*ln(x) - x)", function(x){ return c6 * (x * Math.log(x) - x); }); if (res) return res;
+    }
+    if ((m = s.match(new RegExp("^" + CO + "\\*?ln\\((?:x\\+(" + NUM + ")|(" + NUM + ")\\+x)\\)$")))){
+      var c7 = co(m[1]), d7 = Number(m[2] !== undefined ? m[2] : m[3]);
+      if (a + d7 > 0 && b + d7 > 0){
+        res = done(pref(c7) + "((x+" + r(d7) + ")*ln(x+" + r(d7) + ") - (x+" + r(d7) + "))",
+          function(x){ var u = x + d7; return c7 * (u * Math.log(u) - u); });
+        if (res) return res;
+      }
+    }
+    if (/^(?:sqrt|raiz)\(1-x\^2\)$/.test(s) && Math.abs(a) <= 1 && Math.abs(b) <= 1){
+      res = done("(x*sqrt(1-x^2) + arcsin(x))/2", function(x){ return (x * Math.sqrt(1 - x * x) + Math.asin(x)) / 2; }); if (res) return res;
+    }
+    return null;
+  }
+  function integReference(f, a, b){
+    var nodes = [0, 0.5384693101056831, -0.5384693101056831, 0.906179845938664, -0.906179845938664];
+    var w = [0.5688888888888889, 0.4786286704993665, 0.4786286704993665, 0.2369268850561891, 0.2369268850561891];
+    var N = 2000, hh = (b - a) / N, tot = 0;
+    for (var i = 0; i < N; i++){
+      var mid = a + (i + 0.5) * hh;
+      for (var j = 0; j < 5; j++){
+        var v = f(mid + nodes[j] * hh / 2);
+        if (!isFinite(v)) return null;
+        tot += w[j] * v;
+      }
+    }
+    return tot * hh / 2;
+  }
+  function integExact(expr, a, b, f){
+    var sym = integAntiderivative(expr, a, b);
+    if (sym) return {kind:"analitica", text:sym.text, value:sym.value};
+    var ref = integReference(f, a, b);
+    return ref === null ? null : {kind:"numerica", value:ref};
+  }
+
+  // ---- limitante do erro: |E| <= C (b-a)^(p+1) M / n^p ----
+  function integDerivMax(f, a, b, order){
+    var N = 400, d = (b - a) / N, s = d, M = 0, i, k;
+    var fw = order === 2 ? [2, -5, 4, -1] : [3, -14, 26, -24, 11, -2];   // diferença lateral, ordem de erro 2
+    var ce = order === 2 ? [1, -2, 1] : [1, -4, 6, -4, 1];                 // diferença central
+    var margin = order === 2 ? 1 : 2;
+    for (i = 0; i <= N; i++){
+      var x = a + i * d, v = 0, pts = [], co;
+      if (i < margin){ co = fw; for (k = 0; k < co.length; k++) pts.push(x + k * s); }
+      else if (i > N - margin){ co = fw; for (k = 0; k < co.length; k++) pts.push(x - k * s); }
+      else { co = ce; for (k = 0; k < co.length; k++) pts.push(x + (k - margin) * s); }
+      for (k = 0; k < co.length; k++){ var fv = f(pts[k]); if (!isFinite(fv)) return Infinity; v += co[k] * fv; }
+      v = Math.abs(v / Math.pow(s, order));
+      if (v > M) M = v;
+    }
+    return M;
+  }
+  function integErro(st, run){
+    if (run.mode === "table" || !run.f) return null;
+    var p = run.rule === "trap" ? 2 : 4, C = {trap:1 / 12, s13:1 / 180, s38:1 / 80}[run.rule];
+    var Mu = integNum(st.intM), est = !(Mu !== null && Mu > 0);
+    var M = est ? integDerivMax(run.f, run.a, run.b, p) : Mu;
+    var L = Math.abs(run.b - run.a);
+    var out = {p:p, C:C, M:M, est:est, L:L, En:isFinite(M) ? C * L * Math.pow(Math.abs(run.h), p) * M : Infinity};
+    var eps = integNum(st.intEps);
+    if (eps !== null && eps > 0 && isFinite(M) && M > 0){
+      var raw = Math.pow(C * Math.pow(L, p + 1) * M / eps, 1 / p);
+      var stepN = run.rule === "s13" ? 2 : run.rule === "s38" ? 3 : 1;
+      var nn = Math.max(Math.ceil(raw - 1e-9), stepN);
+      nn = Math.ceil(nn / stepN) * stepN;
+      function errAt(q){ return C * Math.pow(L, p + 1) * M / Math.pow(q, p); }
+      while (errAt(nn) > eps && nn < 1e9) nn += stepN;
+      out.eps = eps; out.raw = raw; out.nNeed = nn; out.errNeed = errAt(nn);
+      out.adjusted = nn !== Math.ceil(raw - 1e-9);
+    }
+    return out;
+  }
+
+  function integRunFor(st){
+    var run = integCompute(st);
+    if (run.mode === "func"){
+      try{ run.exact = integExact(st.intFunction, run.a, run.b, run.f); }catch(e){ run.exact = null; }
+      if (run.exact) run.absErr = Math.abs(run.exact.value - run.I);
+      try{ run.err = integErro(st, run); }catch(e){ run.err = null; }
+    }
+    return run;
+  }
+  function integExactLines(run){
+    if (!run.exact) return [];
+    var L = [];
+    if (run.exact.kind === "analitica"){
+      L.push("F(x) = " + run.exact.text);
+      L.push("Valor exato = F(b) - F(a) = " + bisFmt(run.exact.value));
+    } else {
+      L.push("Valor de referência (numérico, alta precisão) = " + bisFmt(run.exact.value));
+    }
+    L.push("Erro absoluto = |exato - aproximado| = " + bisFmt(run.absErr));
+    if (run.exact.value !== 0) L.push("Erro relativo = " + (run.absErr / Math.abs(run.exact.value) * 100).toFixed(4) + " %");
+    return L;
+  }
+  function integErroLines(run){
+    var r = run.err; if (!r) return [];
+    var D = {trap:"12", s13:"180", s38:"80"}[run.rule], dn = run.rule === "trap" ? "f''(x)" : "f''''(x)";
+    var L = ["Limitante do erro: |E| <= (b - a) * h^" + r.p + " * M / " + D];
+    if (!isFinite(r.M)){
+      L.push("M não é finito em [a, b]: não dá para limitar o erro.");
+      return L;
+    }
+    L.push("M = max |" + dn + "| em [a, b] = " + bisFmt(r.M) + (r.est ? " (estimado numericamente)" : " (informado)"));
+    if (r.est && r.M > 1e7) L.push("Aviso: M é enorme porque a derivada cresce sem limite perto de um extremo; o limitante não é confiável.");
+    L.push("Com n = " + run.n + ": |E| <= " + bisFmt(r.En));
+    if (r.eps !== undefined){
+      L.push("Para |E| <= " + bisFmt(r.eps) + ":  n^" + r.p + " >= M * (b - a)^" + (r.p + 1) + " / (" + D + " * " + bisFmt(r.eps) + ")");
+      L.push("n >= " + bisFmt(r.raw));
+      if (r.adjusted) L.push(run.rule === "s13" ? "Simpson 1/3 exige n par, então n sobe para o próximo par." : run.rule === "s38" ? "Simpson 3/8 exige n múltiplo de 3, então n sobe para o próximo múltiplo de 3." : "n precisa ser inteiro.");
+      L.push("n = " + r.nNeed + "  ->  |E| <= " + bisFmt(r.errNeed));
+    }
+    return L;
+  }
+
   function renderInteg(){
     var rule = integRule(), body = document.getElementById("stepsBody");
     var nome = {trap:"TRAPÉZIO COMPOSTO", s13:"SIMPSON 1/3", s38:"SIMPSON 3/8"}[rule];
@@ -3109,37 +3396,18 @@ if rhoOk then
     document.getElementById("matrixCaption").textContent = "";
     lastComputation = null;
     ["btnPdfScilab","btnPreviewOne","btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = true; });
-    var ph = document.getElementById("pdfHint"); if (ph) ph.textContent = "Digite uma função e limites válidos para habilitar o download.";
+    var ph = document.getElementById("pdfHint"); if (ph) ph.textContent = "Digite uma função (ou tabela) e limites válidos para habilitar o download.";
     body.innerHTML = "";
     function fail(msg){
       var d = document.createElement("div"); d.className = "final-box";
       d.innerHTML = "<h3>Não foi possível calcular</h3><div style='font-size:12.5px'></div>";
       d.lastChild.textContent = msg; body.appendChild(d);
     }
-    var a = Number(state.intA), b = Number(state.intB), n = Number(state.intN);
-    if (!String(state.intFunction || "").trim()) return fail("Digite a função f(x).");
-    if (!isFinite(a) || !isFinite(b) || a === b) return fail("Informe limites a e b diferentes.");
-    if (!isFinite(n) || n < 1 || Math.floor(n) !== n || n > 200) return fail("n deve ser um inteiro entre 1 e 200.");
-    if (rule === "s13" && n % 2) return fail("Simpson 1/3 exige n par. Tente n = " + (n + 1) + " ou n = " + (n - 1 || 2) + ".");
-    if (rule === "s38" && n % 3) return fail("Simpson 3/8 exige n múltiplo de 3. Tente n = " + (n + (3 - n % 3)) + (n > 3 ? " ou n = " + (n - n % 3) : "") + ".");
-    var f; try{ f = makeFunction(state.intFunction); }catch(e){ return fail(e.message || "Função inválida."); }
-    var h = (b - a) / n, rows = [], S = 0;
-    for (var i = 0; i <= n; i++){
-      var x = a + i * h, fx = f(x);
-      if (!isFinite(fx)) return fail("f(x) não está definida em x = " + bisFmt(x) + ".");
-      var c = (i === 0 || i === n) ? 1 :
-              rule === "trap" ? 2 :
-              rule === "s13" ? (i % 2 ? 4 : 2) :
-              (i % 3 ? 3 : 2);
-      rows.push({i:i, x:x, fx:fx, c:c, cf:c * fx}); S += c * fx;
-    }
-    var mult = rule === "trap" ? h / 2 : rule === "s13" ? h / 3 : 3 * h / 8;
-    var I = mult * S;
-    try{
-      lastComputation = {method:"integracao", run: integRunFor(state)};
-      ["btnPdfScilab","btnPreviewOne","btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = false; });
-      var ph2 = document.getElementById("pdfHint"); if (ph2) ph2.textContent = "Função válida: Visualizar, Baixar PDF e Código Scilab (.sce) estão disponíveis.";
-    }catch(e){ lastComputation = null; }
+    var run; try{ run = integRunFor(state); }catch(e){ return fail(e.message || "Entrada inválida."); }
+    var h = run.h, S = run.S, I = run.I, rows = run.rows;
+    lastComputation = {method:"integracao", run:run};
+    ["btnPdfScilab","btnPreviewOne","btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = false; });
+    var ph2 = document.getElementById("pdfHint"); if (ph2) ph2.textContent = "Entrada válida: Visualizar, Baixar PDF e Código Scilab (.sce) estão disponíveis.";
     var sum = document.createElement("div"); sum.className = "bis-summary";
     [["h = (b − a)/n", bisFmt(h)], ["Σ cᵢ·f(xᵢ)", bisFmt(S)], ["Integral ≈", bisFmt(I)]].forEach(function(v){
       var d = document.createElement("div"); d.className = "bis-stat";
@@ -3164,35 +3432,17 @@ if rhoOk then
       t.appendChild(tr);
     });
     w.appendChild(t); body.appendChild(w);
-    var fb = document.createElement("div"); fb.className = "final-box"; fb.style.marginTop = "10px";
+    function box(title, lines){
+      var fb = document.createElement("div"); fb.className = "final-box"; fb.style.marginTop = "10px";
+      fb.innerHTML = "<h3></h3><div style='font-size:13px;white-space:pre-wrap;line-height:1.55'></div>";
+      fb.firstChild.textContent = title; fb.lastChild.textContent = lines.join("\n"); body.appendChild(fb);
+    }
     var mtxt = rule === "trap" ? "h/2" : rule === "s13" ? "h/3" : "3h/8";
-    fb.innerHTML = "<h3>Resultado</h3><div style='font-size:13px'></div>";
-    fb.lastChild.textContent = "I ≈ (" + mtxt + ")·Σ = " + bisFmt(mult) + " × " + bisFmt(S) + " = " + bisFmt(I);
-    body.appendChild(fb);
+    box("Resultado", ["I ≈ (" + mtxt + ")·Σ = " + bisFmt(run.mult) + " × " + bisFmt(S) + " = " + bisFmt(I)]);
+    if (run.exact) box(run.exact.kind === "analitica" ? "Valor exato e erro" : "Valor de referência e erro", integExactLines(run));
+    if (run.err) box("Erro máximo", integErroLines(run));
   }
 
-  function integCoef(rule, i, n){
-    if (i === 0 || i === n) return 1;
-    return rule === "trap" ? 2 : rule === "s13" ? (i % 2 ? 4 : 2) : (i % 3 ? 3 : 2);
-  }
-  function integRuleName(rule){ return {trap:"Trapézio composto", s13:"Simpson 1/3", s38:"Simpson 3/8"}[rule]; }
-  function integRunFor(st){
-    var rule = st.intRule === "13" ? "s13" : st.intRule === "38" ? "s38" : "trap";
-    var a = Number(st.intA), b = Number(st.intB), n = Number(st.intN);
-    if (!String(st.intFunction || "").trim()) throw new Error("Digite a função f(x).");
-    if (!isFinite(a) || !isFinite(b) || a === b) throw new Error("Informe limites a e b diferentes.");
-    if (!isFinite(n) || n < 1 || Math.floor(n) !== n || n > 200) throw new Error("n deve ser um inteiro entre 1 e 200.");
-    if (rule === "s13" && n % 2) throw new Error("Simpson 1/3 exige n par.");
-    if (rule === "s38" && n % 3) throw new Error("Simpson 3/8 exige n múltiplo de 3.");
-    var f = makeFunction(st.intFunction), h = (b - a) / n, S = 0;
-    for (var i = 0; i <= n; i++){
-      var fx = f(a + i * h);
-      if (!isFinite(fx)) throw new Error("f(x) não está definida em x = " + bisFmt(a + i * h) + ".");
-      S += integCoef(rule, i, n) * fx;
-    }
-    var mult = rule === "trap" ? h / 2 : rule === "s13" ? h / 3 : 3 * h / 8;
-    return {rule:rule, a:a, b:b, n:n, h:h, S:S, mult:mult, I:mult * S};
-  }
   // "f(x0) + 4f(x1) + 2f(x2) + ... + f(x6)" — abreviado quando n é grande
   function integSomaTexto(rule, n){
     var t = [];
@@ -3202,36 +3452,59 @@ if rhoOk then
   }
   function integTextLines(st, run){
     var mt = run.rule === "trap" ? "h/2" : run.rule === "s13" ? "h/3" : "3h/8";
-    return [
-      "f(x) = " + st.intFunction,
+    var L = [
+      run.mode === "table" ? "f(x): tabela com " + (run.n + 1) + " pontos" : "f(x) = " + st.intFunction,
       "a = " + bisFmt(run.a) + "   b = " + bisFmt(run.b) + "   n = " + run.n,
       "Regra: " + integRuleName(run.rule),
-      "h = (b - a)/n = " + bisFmt(run.h),
-      "Soma = " + integSomaTexto(run.rule, run.n) + " = " + bisFmt(run.S),
-      "I = (" + mt + ") * Soma = " + bisFmt(run.mult) + " * " + bisFmt(run.S) + " = " + bisFmt(run.I)
+      "h = (b - a)/n = " + bisFmt(run.h)
     ];
+    if (run.rows.length <= 14){
+      L.push("Tabela de x e f(x):");
+      run.rows.forEach(function(r){ L.push("x" + r.i + " = " + bisFmt(r.x) + "   f(x" + r.i + ") = " + bisFmt(r.fx)); });
+    }
+    L.push("Soma = " + integSomaTexto(run.rule, run.n) + " = " + bisFmt(run.S));
+    L.push("I = (" + mt + ") * Soma = " + bisFmt(run.mult) + " * " + bisFmt(run.S) + " = " + bisFmt(run.I));
+    return L.concat(integExactLines(run), integErroLines(run));
   }
   function buildScilabCodeInteg(){
     if (!lastComputation || lastComputation.method !== "integracao") return "";
-    var st = state, run = lastComputation.run;
+    var st = state, run = lastComputation.run, table = run.mode === "table";
     var mtS = run.rule === "trap" ? "h/2" : run.rule === "s13" ? "h/3" : "3*h/8";
     var mtT = run.rule === "trap" ? "h/2" : run.rule === "s13" ? "h/3" : "3h/8";
     var coef = run.rule === "trap" ? "    if i == 0 | i == n then\n        c = 1;\n    else\n        c = 2;\n    end\n" :
                run.rule === "s13" ? "    if i == 0 | i == n then\n        c = 1;\n    elseif modulo(i, 2) == 1 then\n        c = 4;\n    else\n        c = 2;\n    end\n" :
                "    if i == 0 | i == n then\n        c = 1;\n    elseif modulo(i, 3) == 0 then\n        c = 2;\n    else\n        c = 3;\n    end\n";
-    var L = integTextLines(st, run);
     var code = SCE_HEADER + SCE_HELP_BASE + SCE_HELP_FNUM8;
-    code += "function y = f(x)\n    y = " + bisExprToScilab(st.intFunction) + ";\nendfunction\n\n";
-    code += "a = " + fmtScilab(run.a) + ";\nb = " + fmtScilab(run.b) + ";\nn = " + run.n + "; // número de subintervalos\n\n";
+    if (table){
+      code += "x = [" + run.rows.map(function(r){ return fmtScilab(r.x); }).join(" ") + "];\n";
+      code += "y = [" + run.rows.map(function(r){ return fmtScilab(r.fx); }).join(" ") + "];\n";
+      code += "n = length(x) - 1; // número de subintervalos\na = x(1);\nb = x($);\n\n";
+    } else {
+      code += "function y = f(x)\n    y = " + bisExprToScilab(st.intFunction) + ";\nendfunction\n\n";
+      code += "a = " + fmtScilab(run.a) + ";\nb = " + fmtScilab(run.b) + ";\nn = " + run.n + "; // número de subintervalos\n\n";
+    }
     code += sceCabecalho();
-    code += sceEscreve(L[0]);
+    code += sceEscreve(table ? "f(x): tabela com " + (run.n + 1) + " pontos" : "f(x) = " + st.intFunction);
     code += "escreve(msprintf(\"a = %s   b = %s   n = %d\", fnum8(a), fnum8(b), n));\n";
-    code += sceEscreve(L[2]);
+    code += sceEscreve("Regra: " + integRuleName(run.rule));
     code += "h = (b - a) / n;\nescreve(\"h = (b - a)/n = \" + fnum8(h));\n";
-    code += "S = 0;\nfor i = 0:n\n    x = a + i*h;\n" + coef + "    S = S + c*f(x);\nend\n";
+    code += table ? "S = 0;\nfor i = 0:n\n" + coef + "    S = S + c*y(i+1);\nend\n"
+                  : "S = 0;\nfor i = 0:n\n    x = a + i*h;\n" + coef + "    S = S + c*f(x);\nend\n";
     code += "escreve(\"Soma = " + integSomaTexto(run.rule, run.n) + " = \" + fnum8(S));\n";
     code += "I = (" + mtS + ") * S;\n";
     code += "escreve(\"I = (" + mtT + ") * Soma = \" + fnum8(" + mtS + ") + \" * \" + fnum8(S) + \" = \" + fnum8(I));\n";
+    if (run.exact){
+      code += "Iex = " + fmtScilab(run.exact.value) + ";\n";
+      if (run.exact.kind === "analitica"){
+        code += sceEscreve("F(x) = " + run.exact.text);
+        code += "escreve(\"Valor exato = F(b) - F(a) = \" + fnum8(Iex));\n";
+      } else {
+        code += "escreve(\"Valor de referência (numérico, alta precisão) = \" + fnum8(Iex));\n";
+      }
+      code += "escreve(\"Erro absoluto = |exato - aproximado| = \" + fnum8(abs(Iex - I)));\n";
+      if (run.exact.value !== 0) code += "escreve(\"Erro relativo = \" + msprintf(\"%.4f\", abs(Iex - I) / abs(Iex) * 100) + \" %\");\n";
+    }
+    integErroLines(run).forEach(function(l){ code += sceEscreve(l); });
     return code;
   }
 
