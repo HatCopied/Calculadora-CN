@@ -472,6 +472,9 @@
     .bis-graph-wrap{ min-height:300px; }
   }
 
+  .interp-grid{ display:grid; grid-template-columns:22px 1fr 1fr; gap:6px; align-items:center; width:100%; margin-top:8px; }
+  .interp-grid input{ width:100%; min-width:0; box-sizing:border-box; }
+  .interp-h{ font-size:11px; color:var(--ink-faint); text-align:center; }
 </style>
 </head>
 <body>
@@ -531,6 +534,10 @@
     <label class="method-opt" data-method="integracao">
       <input type="radio" name="method" value="integracao">
       <span class="mo-text"><b>Integração Numérica</b></span>
+    </label>
+    <label class="method-opt" data-method="interp">
+      <input type="radio" name="method" value="interp">
+      <span class="mo-text"><b>Interpolação</b></span>
     </label>
   </div>
 
@@ -626,6 +633,44 @@
                 <label for="intM">M (opcional)</label>
                 <input type="text" class="function-input" id="intM" spellcheck="false" placeholder="vazio = estimado automaticamente">
                 <div class="hint">Máximo de |f″(x)| (trapézio) ou |f⁗(x)| (Simpson) em [a, b]. Use se quiser o valor da sua derivação à mão.</div>
+              </div>
+            </div>
+
+            <div id="interpParams" class="bisection-config" style="display:none;">
+              <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="interpRule">Método</label>
+                <select class="param" id="interpRule" style="width:100%;">
+                  <option value="lag">Forma de Lagrange</option>
+                  <option value="sis">Polinômio por sistema linear</option>
+                </select>
+              </div>
+              <div class="function-field">
+                <div class="field-row">
+                  <label>Pontos</label>
+                  <div class="stepper">
+                    <button type="button" data-iact="-" aria-label="remover ponto">−</button>
+                    <span id="interpCnt">3</span>
+                    <button type="button" data-iact="+" aria-label="adicionar ponto">+</button>
+                  </div>
+                </div>
+                <div class="interp-grid" id="interpGrid"></div>
+                <div class="hint">Digite x e f(x) em cada linha. Use − e + para tirar ou colocar pontos (de 2 a 12). Vírgula decimal e frações como 1/6 são aceitas. Os x não precisam ser igualmente espaçados. Com n + 1 pontos o polinômio tem grau até n. Dá para colar uma tabela inteira numa célula.</div>
+              </div>
+              <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="interpX">Calcular p(x) em x (opcional)</label>
+                <input type="text" class="function-input" id="interpX" spellcheck="false" placeholder="ex.: 3,1 ou 1/4">
+              </div>
+              <div class="field-row" style="flex-direction:column;align-items:flex-start;gap:5px;">
+                <label for="interpFunc">f(x) exata (opcional)</label>
+                <input type="text" class="function-input" id="interpFunc" spellcheck="false" placeholder="ex.: e^x ou sin(pi*x)">
+                <div class="hint">Se informar x e f(x), o passo a passo mostra o erro |f(x) − p(x)| no ponto. A curva de f(x) também aparece no gráfico.</div>
+              </div>
+              <div class="bisection-actions">
+                <button class="btn bis-graph" id="btnInterpGraph" type="button">Gráfico</button>
+              </div>
+              <div class="checkbox-row" style="margin-top:8px;">
+                <input type="checkbox" id="chkInterpChart">
+                <label for="chkInterpChart" title="Inclui o gráfico do polinômio interpolador e dos pontos no PDF">Inserir gráfico (PDF)</label>
               </div>
             </div>
 
@@ -869,6 +914,7 @@
     bisStopMode: "iter", bisTolerance: 0.001, bisChartOn: false,
     rootPhi: "(2*x+5)^(1/3)", rootX0: 2, rootDeriv: "",
     intFunction: "x^2", intA: 0, intB: 1, intN: 4, intRule: "trap", intMode: "func", intTable: "", intEps: "", intM: "",
+    interpTable: "-1 4\n0 1\n2 -1", interpX: "1", interpRule: "lag", interpFunc: "", interpChartOn: false,
     headerOn: false, headerName: "", headerQuestion: "",
     scilabChartOn: false,
     checkConv: false,
@@ -1340,7 +1386,7 @@
   function rootIsInterval(m){ return m==="bissecao" || m==="falsapos"; }
   function metodoSlug(m){
     return ({gauss:"escalonamento", lu:"fatoracao-lu", seidel:"gauss-seidel", jacobi:"jacobi",
-             bissecao:"bissecao", falsapos:"posicao-falsa", pontofixo:"ponto-fixo", newton:"newton", integracao:"integracao-numerica"})[m] || "jacobi";
+             bissecao:"bissecao", falsapos:"posicao-falsa", pontofixo:"ponto-fixo", newton:"newton", integracao:"integracao-numerica", interp:"interpolacao"})[m] || "jacobi";
   }
 
   // ---------- Derivada simbólica automática (para o método de Newton) ----------
@@ -1993,7 +2039,7 @@
   }
 
   function drawBisectionGraph(run){
-    var M = rootGraphModel(run);
+    var M = run && run.interpModel ? run.interpModel : rootGraphModel(run);
     var svg = document.getElementById("bisGraphSvg");
     var W = 900, H = 560, pad = {l:65, r:25, t:25, b:55};
     while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -2036,7 +2082,7 @@
     });
     M.pts.forEach(function(p){ el("circle", {cx:sx(p.x), cy:sy(p.y), r:p.r, fill:GRAPH_CSS[p.c]}); });
     el("text", {x:W-pad.r, y:H-16, fill:"var(--ink-soft)", "font-size":"13", "text-anchor":"end"}, "x");
-    el("text", {x:18, y:pad.t+4, fill:"var(--ink-soft)", "font-size":"13"}, M.kind === "pontofixo" ? "φ(x)" : "f(x)");
+    el("text", {x:18, y:pad.t+4, fill:"var(--ink-soft)", "font-size":"13"}, M.ylabel || (M.kind === "pontofixo" ? "φ(x)" : "f(x)"));
     if (M.interval){
       el("text", {x:pad.l, y:H-16, fill:"var(--ink-faint)", "font-size":"11"}, "a = " + bisFmt(M.first.a));
       el("text", {x:W-pad.r, y:H-16, fill:"var(--ink-faint)", "font-size":"11", "text-anchor":"end"}, "b = " + bisFmt(M.first.b));
@@ -2046,7 +2092,7 @@
       return '<span><i class="' + (it.t === "line" ? "bis-line" : "bis-dot") + '" style="background:' + GRAPH_CSS[it.c] + '"></i> ' + it.l + '</span>';
     }).join("");
     var gt = document.getElementById("bisGraphTitle");
-    if (gt) gt.textContent = {bissecao:"Gráfico — Método da Bisseção", falsapos:"Gráfico — Método da Posição Falsa",
+    if (gt) gt.textContent = M.title || {bissecao:"Gráfico — Método da Bisseção", falsapos:"Gráfico — Método da Posição Falsa",
       pontofixo:"Gráfico — Método do Ponto Fixo", newton:"Gráfico — Método de Newton"}[M.kind];
   }
 
@@ -2104,6 +2150,11 @@
     wrap.innerHTML = "";
     var caption = document.getElementById("matrixCaption");
 
+    if (isInterp(state.method)){
+      document.getElementById("matrixHead").textContent = "INTERPOLAÇÃO POLINOMIAL";
+      caption.textContent = "";
+      return;
+    }
     if (isInteg(state.method)){
       document.getElementById("matrixHead").textContent = "INTEGRAÇÃO NUMÉRICA";
       caption.textContent = "";
@@ -2999,6 +3050,7 @@ if rhoOk then
   }
 
   function render(){
+    if (isInterp(state.method)){ renderInterp(); return; }
     if (isInteg(state.method)){ renderInteg(); return; }
     document.getElementById("stepsHead").textContent =
       state.method === "gauss" ? "PASSO A PASSO — ESCALONAMENTO" :
@@ -3508,6 +3560,593 @@ if rhoOk then
     return code;
   }
 
+  // ======================================================================
+  // Interpolação polinomial: forma de Lagrange e sistema linear (Vandermonde)
+  // Tudo é calculado com frações exatas (BigInt), então 2/3 sai 2/3 e não 0.6667.
+  // ======================================================================
+  function isInterp(m){ return m === "interp"; }
+
+  // ---- aritmética racional exata ----
+  function bAbs(a){ return a < 0n ? -a : a; }
+  function bGcd(a, b){ a = bAbs(a); b = bAbs(b); while (b){ var t = a % b; a = b; b = t; } return a; }
+  function Q(n, d){
+    if (d === undefined) d = 1n;
+    if (d === 0n) throw new Error("Divisão por zero.");
+    if (d < 0n){ n = -n; d = -d; }
+    var g = bGcd(n, d); if (g > 1n){ n = n / g; d = d / g; }
+    return {n:n, d:d};
+  }
+  function qAdd(a, b){ return Q(a.n * b.d + b.n * a.d, a.d * b.d); }
+  function qSub(a, b){ return Q(a.n * b.d - b.n * a.d, a.d * b.d); }
+  function qMul(a, b){ return Q(a.n * b.n, a.d * b.d); }
+  function qDiv(a, b){ return Q(a.n * b.d, a.d * b.n); }
+  function qNeg(a){ return {n:-a.n, d:a.d}; }
+  function qZero(a){ return a.n === 0n; }
+  function qIsOne(a){ return a.n === 1n && a.d === 1n; }
+  function qNum(a){ return Number(a.n) / Number(a.d); }
+
+  // "1,5"  "-0.17"  "1e-3"  "1/6"  ->  fração exata (ou null se inválido)
+  function qDec(s){
+    var m = String(s).match(/^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+    if (!m || (m[2] === "" && (m[3] === undefined || m[3] === ""))) return null;
+    var ip = m[2] || "", fp = m[3] || "", ex = m[4] ? parseInt(m[4], 10) : 0;
+    if (Math.abs(ex) > 30 || fp.length > 30 || ip.length > 30) return null;
+    var n = BigInt(ip + fp || "0"), d = 10n ** BigInt(fp.length);
+    if (ex > 0) n = n * 10n ** BigInt(ex); else if (ex < 0) d = d * 10n ** BigInt(-ex);
+    if (m[1] === "-") n = -n;
+    return Q(n, d);
+  }
+  function qParse(tok){
+    var t = String(tok == null ? "" : tok).trim().replace(/\u2212/g, "-").replace(",", ".");
+    var m = t.match(/^([+-]?[0-9.]+(?:e[+-]?\d+)?)\/([+-]?[0-9.]+(?:e[+-]?\d+)?)$/i);
+    if (m){
+      var a = qDec(m[1]), b = qDec(m[2]);
+      if (!a || !b || qZero(b)) return null;
+      return qDiv(a, b);
+    }
+    return qDec(t);
+  }
+
+  // decimal exato quando a fração termina (denominador só com 2 e 5); senão n/d
+  function qStr(q){
+    if (q.d === 1n) return q.n.toString();
+    var k = 0, p = 1n;
+    while (p % q.d !== 0n && k < 12){ p *= 10n; k++; }
+    if (p % q.d === 0n){
+      var s = (bAbs(q.n) * (p / q.d)).toString();
+      while (s.length <= k) s = "0" + s;
+      s = s.slice(0, s.length - k) + "." + s.slice(s.length - k);
+      return (q.n < 0n ? "-" : "") + s;
+    }
+    return q.n.toString() + "/" + q.d.toString();
+  }
+  function qIsFrac(q){ return qStr(q).indexOf("/") >= 0; }
+  function qP(q){ var s = qStr(q); return (q.n < 0n || s.indexOf("/") >= 0) ? "(" + s + ")" : s; }
+  function qNegP(q){ var s = qStr(q); return q.n < 0n ? "(" + s + ")" : s; }
+  function dec6(x){
+    if (!isFinite(x)) return "-";
+    var r = Math.round(x * 1e6) / 1e6; if (Object.is(r, -0)) r = 0;
+    if (r === 0 && x !== 0) return x.toExponential(2);
+    return String(r);
+  }
+  function qValStr(q){ return qIsFrac(q) ? qStr(q) + " (aprox. " + dec6(qNum(q)) + ")" : qStr(q); }
+
+  // ---- polinômios (coeficientes em ordem crescente) ----
+  function polyMulLin(c, r){            // c(x) * (x - r)
+    var out = [], i, j;
+    for (i = 0; i <= c.length; i++) out.push(Q(0n));
+    for (j = 0; j < c.length; j++){ out[j + 1] = qAdd(out[j + 1], c[j]); out[j] = qSub(out[j], qMul(c[j], r)); }
+    return out;
+  }
+  function polyScale(c, s){ return c.map(function(a){ return qMul(a, s); }); }
+  function polyAdd(a, b){
+    var n = Math.max(a.length, b.length), out = [], i;
+    for (i = 0; i < n; i++) out.push(qAdd(i < a.length ? a[i] : Q(0n), i < b.length ? b[i] : Q(0n)));
+    return out;
+  }
+  function polyEval(c, x){ var r = Q(0n), k; for (k = c.length - 1; k >= 0; k--) r = qAdd(qMul(r, x), c[k]); return r; }
+  function polyDeg(c){ var k; for (k = c.length - 1; k > 0; k--) if (!qZero(c[k])) return k; return 0; }
+  function polyHasFrac(c){ return c.some(function(a){ return qIsFrac(a); }); }
+  var interpFracMode = false;   // true: a questão tem alguma fração (2/3...), então todos os não inteiros saem em fração
+  // dec = true escreve os coeficientes em decimal (6 casas)
+  function polyStr(c, dec){
+    var out = "", first = true, k;
+    // se algum coeficiente é fração (ex.: 2/3), todos os não inteiros saem como fração
+    var asFrac = !dec && (interpFracMode || polyHasFrac(c));
+    for (k = c.length - 1; k >= 0; k--){
+      var a = c[k]; if (qZero(a)) continue;
+      var neg = a.n < 0n, ab = neg ? qNeg(a) : a;
+      var cs = dec ? dec6(qNum(ab)) : (asFrac && ab.d !== 1n ? ab.n.toString() + "/" + ab.d.toString() : qStr(ab));
+      var isOne = dec ? cs === "1" : qIsOne(ab);
+      var frac = !dec && cs.indexOf("/") >= 0, body;
+      if (k === 0) body = cs;
+      else {
+        var xs = k === 1 ? "x" : "x^" + k;
+        body = isOne ? xs : (frac ? "(" + cs + ")" + xs : cs + xs);
+      }
+      if (first){ out = (neg ? "-" : "") + body; first = false; }
+      else out += (neg ? " - " : " + ") + body;
+    }
+    return first ? "0" : out;
+  }
+  function qSolve(A, b){                 // Gauss-Jordan exato
+    var n = A.length, M = A.map(function(r, i){ return r.slice().concat([b[i]]); }), c, r, p;
+    for (c = 0; c < n; c++){
+      p = c; while (p < n && qZero(M[p][c])) p++;
+      if (p === n) throw new Error("O sistema não tem solução única.");
+      var tmp = M[c]; M[c] = M[p]; M[p] = tmp;
+      var pv = M[c][c];
+      M[c] = M[c].map(function(v){ return qDiv(v, pv); });
+      for (r = 0; r < n; r++){
+        if (r !== c && !qZero(M[r][c])){
+          var f = M[r][c], row = M[c];
+          M[r] = M[r].map(function(v, j){ return qSub(v, qMul(f, row[j])); });
+        }
+      }
+    }
+    return M.map(function(r){ return r[n]; });
+  }
+
+  // ---- entrada, cálculo ----
+  function interpParse(st){
+    var lines = String(st.interpTable || "").split(/\r?\n/), pts = [], i, j;
+    for (i = 0; i < lines.length; i++){
+      var l = lines[i].trim(); if (!l) continue;
+      var parts = l.split(/[;\t ]+/).filter(Boolean);
+      if (parts.length === 0) continue;
+      if (parts.length === 1) throw new Error("Ponto " + i + ": preencha x e y.");
+      if (parts.length !== 2) throw new Error("Linha " + (i + 1) + ": use o formato  x  f(x).");
+      var x = qParse(parts[0]), y = qParse(parts[1]);
+      if (!x || !y) throw new Error("Ponto " + i + ": valor inválido (use números, vírgula decimal ou fração como 1/6).");
+      pts.push({x:x, y:y});
+    }
+    if (pts.length < 2) throw new Error("Informe pelo menos 2 pontos.");
+    if (pts.length > 12) throw new Error("No máximo 12 pontos (polinômio de grau 11).");
+    for (i = 0; i < pts.length; i++) for (j = i + 1; j < pts.length; j++){
+      if (qZero(qSub(pts[i].x, pts[j].x))) throw new Error("Há dois pontos com x = " + qStr(pts[i].x) + ". Os x precisam ser todos diferentes.");
+    }
+    return pts;
+  }
+  function interpCompute(st){
+    var pts = interpParse(st), n = pts.length - 1, rule = st.interpRule === "sis" ? "sis" : "lag";
+    var xv = null, xs = String(st.interpX == null ? "" : st.interpX).trim();
+    if (xs !== ""){ xv = qParse(xs); if (!xv) throw new Error("O valor de x a calcular é inválido."); }
+    var L = [], P = [Q(0n)];
+    pts.forEach(function(p, i){
+      var num = [Q(1n)], den = Q(1n);
+      pts.forEach(function(r, j){ if (j !== i){ num = polyMulLin(num, r.x); den = qMul(den, qSub(p.x, r.x)); } });
+      var poly = polyScale(num, qDiv(Q(1n), den));
+      L.push({i:i, num:num, den:den, poly:poly});
+      P = polyAdd(P, polyScale(poly, p.y));
+    });
+    var V = null, coefs = P;
+    if (rule === "sis"){
+      V = pts.map(function(p){
+        var row = [], pw = Q(1n), k;
+        for (k = 0; k <= n; k++){ row.push(pw); pw = qMul(pw, p.x); }
+        return row;
+      });
+      coefs = qSolve(V, pts.map(function(p){ return p.y; }));
+    }
+    while (coefs.length < n + 1) coefs.push(Q(0n));
+    var run = {rule:rule, n:n, pts:pts, L:L, V:V, coefs:coefs, deg:polyDeg(coefs), xv:xv, pval:null, Lvals:null, fexact:null, fx:null};
+    if (xv){
+      run.pval = polyEval(coefs, xv);
+      run.Lvals = L.map(function(Li){ return polyEval(Li.poly, xv); });
+      var fs = String(st.interpFunc || "").trim();
+      if (fs){
+        var f; try{ f = makeFunction(fs); }catch(e){ throw new Error("Função f(x) inválida."); }
+        var fv; try{ fv = f(qNum(xv)); }catch(e){ fv = NaN; }
+        if (!isFinite(fv)) throw new Error("f(x) não está definida em x = " + qStr(xv) + ".");
+        run.fexact = fv; run.fx = Math.abs(fv - qNum(run.pval));
+      }
+    }
+    return run;
+  }
+  function interpRunFor(st){ return interpCompute(st); }
+
+  function interpFac(r){
+    if (qZero(r)) return "x";
+    return r.n > 0n ? "(x - " + qStr(r) + ")" : "(x + " + qStr(qNeg(r)) + ")";
+  }
+
+  // texto do passo a passo, em seções (a mesma base serve pra tela, PDF e visualização)
+  function interpSections(st, run){
+    var S = [], n = run.n, pts = run.pts, d = [], i;
+    interpFracMode = polyHasFrac(run.coefs) || run.L.some(function(Li){ return polyHasFrac(Li.poly) || polyHasFrac(Li.num); });
+    pts.forEach(function(p, k){ d.push("x" + k + " = " + qStr(p.x) + "     y" + k + " = " + qStr(p.y)); });
+    d.push((n + 1) + " pontos  =>  grau do polinômio <= " + n);
+    d.push("Método: " + (run.rule === "lag" ? "forma de Lagrange" : "sistema linear (coeficientes a0, a1, ..., a" + n + ")"));
+    if (String(st.interpFunc || "").trim()) d.push("f(x) = " + String(st.interpFunc).trim());
+    if (run.xv) d.push("Calcular em x = " + qStr(run.xv));
+    S.push({t:"Dados", l:d});
+
+    if (run.rule === "lag"){
+      S.push({t:"Forma de Lagrange", l:[
+        "p(x) = " + pts.map(function(p, k){ return "y" + k + "*L" + k + "(x)"; }).join(" + "),
+        "Li(x) = produto de (x - xj)/(xi - xj), para j diferente de i"
+      ]});
+      var lb = [];
+      run.L.forEach(function(Li, k){
+        var numF = [], denF = [];
+        pts.forEach(function(r, j){ if (j !== k){ numF.push(interpFac(r.x)); denF.push("(" + qStr(pts[k].x) + " - " + qNegP(r.x) + ")"); } });
+        lb.push("L" + k + "(x) = " + numF.join("") + " / [" + denF.join("") + "]");
+        if (!qIsOne(Li.den)) lb.push("      = (" + polyStr(Li.num) + ") / " + qP(Li.den));
+        lb.push("      = " + polyStr(Li.poly));
+        if (k < run.L.length - 1) lb.push("");
+      });
+      S.push({t:"Polinômios de Lagrange", l:lb});
+      var pl = [];
+      if (n <= 4) pl.push("p(x) = " + pts.map(function(p, k){ return qNegP(p.y) + "*[" + polyStr(run.L[k].poly) + "]"; }).join(" + "));
+      pl.push("p(x) = " + polyStr(run.coefs));
+      if (polyHasFrac(run.coefs)) pl.push("p(x) = " + polyStr(run.coefs, true) + "   (em decimal)");
+      S.push({t:"Polinômio interpolador", l:pl});
+    } else {
+      var sl = ["p(x) = a0 + a1*x + ... + a" + n + "*x^" + n + ",  impondo p(xi) = yi:"];
+      pts.forEach(function(p, k){
+        var terms = [], j;
+        for (j = 0; j <= n; j++) terms.push(j === 0 ? "a0" : "a" + j + "*" + qP(p.x) + (j > 1 ? "^" + j : ""));
+        sl.push(terms.join(" + ") + " = " + qStr(p.y));
+      });
+      S.push({t:"Sistema linear", l:sl});
+      var ml = run.V.map(function(row, k){ return "[ " + row.map(qStr).join("   ") + "  |  " + qStr(pts[k].y) + " ]"; });
+      S.push({t:"Matriz aumentada [V | y]", l:ml, mono:true});
+      var al = run.coefs.map(function(a, k){ return "a" + k + " = " + qValStr(a); });
+      S.push({t:"Solução do sistema", l:al});
+      var pl2 = ["p(x) = " + polyStr(run.coefs)];
+      if (polyHasFrac(run.coefs)) pl2.push("p(x) = " + polyStr(run.coefs, true) + "   (em decimal)");
+      S.push({t:"Polinômio interpolador", l:pl2});
+    }
+
+    if (run.xv){
+      var xs = qStr(run.xv), vl = [];
+      if (run.rule === "lag"){
+        run.Lvals.forEach(function(v, k){ vl.push("L" + k + "(" + xs + ") = " + qStr(v)); });
+        var sum = run.Lvals.reduce(function(a, b){ return qAdd(a, b); }, Q(0n));
+        vl.push("Conferência: a soma dos Li(" + xs + ") = " + qStr(sum) + " (deve dar 1)");
+        vl.push("p(" + xs + ") = " + pts.map(function(p, k){ return qP(p.y) + "*" + qP(run.Lvals[k]); }).join(" + "));
+      } else {
+        vl.push("p(" + xs + ") = " + run.coefs.map(function(a, k){
+          return k === 0 ? qStr(a) : qP(a) + "*" + qP(run.xv) + (k > 1 ? "^" + k : "");
+        }).join(" + "));
+      }
+      vl.push("p(" + xs + ") = " + qValStr(run.pval));
+      S.push({t:"Valor do polinômio em x = " + xs, l:vl});
+      if (run.fexact !== null){
+        var el = ["f(" + xs + ") = " + bisFmt(run.fexact), "p(" + xs + ") = " + bisFmt(qNum(run.pval)),
+                  "Erro absoluto = |f(x) - p(x)| = " + bisFmt(run.fx)];
+        if (run.fexact !== 0) el.push("Erro relativo = " + (run.fx / Math.abs(run.fexact) * 100).toFixed(4) + " %");
+        S.push({t:"Erro em relação à f(x) exata", l:el});
+      }
+    }
+    return S;
+  }
+
+  // quebra linhas longas (o PDF não faz quebra sozinho)
+  function interpWrap(s, max){
+    if (s.length <= max) return [s];
+    var indent = s.match(/^\s*/)[0] + "    ", out = [], rest = s;
+    while (rest.length > max){
+      var cut = -1, best = -1, i;
+      for (i = max; i > indent.length + 4; i--){
+        if (rest.charAt(i) === " "){
+          if (best < 0) best = i;
+          var nx = rest.charAt(i + 1);
+          if (nx === "+" || nx === "-" || nx === "="){ cut = i; break; }
+        }
+      }
+      if (cut < 0 || cut < max * 0.5) cut = best;
+      if (cut < 0) cut = max;
+      out.push(rest.slice(0, cut).replace(/\s+$/, ""));
+      rest = indent + rest.slice(cut).replace(/^\s+/, "");
+    }
+    out.push(rest);
+    return out;
+  }
+  function interpTextLines(st, run){
+    var out = [];
+    interpSections(st, run).forEach(function(sec, k){
+      if (k > 0) out.push("");
+      out.push("// " + sec.t);
+      sec.l.forEach(function(l){ interpWrap(l, 62).forEach(function(w){ out.push(w); }); });
+    });
+    return out;
+  }
+
+  // ---- tela ----
+  function syncInterp(){
+    var on = isInterp(state.method);
+    document.getElementById("interpParams").style.display = on ? "flex" : "none";
+    if (on){
+      document.getElementById("dimsPanel").classList.add("dims-full");
+      document.getElementById("rowsField").style.display = "none";
+      document.getElementById("colsField").style.display = "none";
+      var dh = document.getElementById("dimsHint"); if (dh) dh.style.display = "none";
+    }
+    document.getElementById("interpRule").value = state.interpRule === "sis" ? "sis" : "lag";
+    buildInterpGrid(interpRowsFromState());
+    document.getElementById("interpX").value = state.interpX || "";
+    document.getElementById("interpFunc").value = state.interpFunc || "";
+    document.getElementById("chkInterpChart").checked = !!state.interpChartOn;
+  }
+  (function bindInterp(){
+    function on(id, key, evt){
+      document.getElementById(id).addEventListener(evt || "input", function(){
+        state[key] = this.value; saveLocal(); if (isInterp(state.method)) render();
+      });
+    }
+    on("interpX", "interpX"); on("interpFunc", "interpFunc");
+    on("interpRule", "interpRule", "change");
+    document.getElementById("chkInterpChart").addEventListener("change", function(){
+      state.interpChartOn = this.checked; saveLocal();
+    });
+  })();
+
+  // ---- editor de pontos: coluna X e coluna Y lado a lado, com + e - ----
+  // (o estado guarda o texto "x;y" por linha, então salvar questão, PDF e exemplos seguem iguais)
+  var INTERP_MAX = 12, INTERP_MIN = 2;
+  function interpRowsFromState(){
+    var rows = String(state.interpTable || "").split(/\r?\n/).map(function(l){
+      if (l.indexOf(";") >= 0){ var p = l.split(";"); return [p[0].trim(), (p[1] || "").trim()]; }
+      var t = l.trim().split(/[\t ]+/).filter(Boolean); return [t[0] || "", t[1] || ""];
+    });
+    while (rows.length < INTERP_MIN) rows.push(["", ""]);
+    return rows.slice(0, INTERP_MAX);
+  }
+  function interpRowsFromDom(){
+    var rows = [];
+    document.querySelectorAll("#interpGrid input").forEach(function(inp){
+      var i = +inp.dataset.r, k = +inp.dataset.k;
+      (rows[i] = rows[i] || ["", ""])[k] = inp.value.trim();
+    });
+    return rows;
+  }
+  function interpStoreRows(rows){ state.interpTable = rows.map(function(r){ return r[0] + ";" + r[1]; }).join("\n"); }
+  function buildInterpGrid(rows){
+    var g = document.getElementById("interpGrid"); g.innerHTML = "";
+    function lab(t){ var d = document.createElement("div"); d.className = "interp-h"; d.textContent = t; g.appendChild(d); }
+    lab("i"); lab("x"); lab("y = f(x)");
+    rows.forEach(function(r, i){
+      lab(String(i));
+      [0, 1].forEach(function(k){
+        var inp = document.createElement("input"); inp.type = "text"; inp.className = "function-input";
+        inp.spellcheck = false; inp.value = r[k]; inp.dataset.r = String(i); inp.dataset.k = String(k);
+        inp.setAttribute("aria-label", (k ? "y" : "x") + i); g.appendChild(inp);
+      });
+    });
+    document.getElementById("interpCnt").textContent = String(rows.length);
+  }
+  (function bindInterpGrid(){
+    var g = document.getElementById("interpGrid");
+    g.addEventListener("input", function(){ interpStoreRows(interpRowsFromDom()); saveLocal(); if (isInterp(state.method)) render(); });
+    // colar uma tabela (Excel, PDF) numa célula preenche as linhas todas
+    g.addEventListener("paste", function(e){
+      var t = (e.clipboardData || window.clipboardData).getData("text");
+      if (!/[\n\t]/.test(String(t).trim())) return;
+      e.preventDefault();
+      var lines = String(t).split(/\r?\n/).map(function(l){ return l.trim(); }).filter(Boolean);
+      state.interpTable = lines.join("\n");
+      buildInterpGrid(interpRowsFromState()); interpStoreRows(interpRowsFromDom()); saveLocal(); render();
+    });
+    document.getElementById("interpParams").addEventListener("click", function(e){
+      var b = e.target.closest("button[data-iact]"); if (!b) return;
+      var rows = interpRowsFromDom();
+      if (b.dataset.iact === "+" && rows.length < INTERP_MAX) rows.push(["", ""]);
+      else if (b.dataset.iact === "-" && rows.length > INTERP_MIN) rows.pop();
+      else return;
+      interpStoreRows(rows); buildInterpGrid(rows); saveLocal(); render();
+    });
+  })();
+
+  // exemplos dos slides e das listas; cada clique em "Carregar exemplo" passa pro próximo
+  var interpExIdx = 0;
+  var INTERP_EXEMPLOS = [
+    {t:"1 -1\n2 2\n3 1\n4 2", x:"2.43", r:"lag", f:""},
+    {t:"-1 4\n0 1\n2 -1", x:"1", r:"lag", f:""},
+    {t:"2.8 16.44\n3.0 20.09\n3.2 24.53", x:"3.1", r:"sis", f:"e^x"},
+    {t:"0 0\n1/6 0.5\n1/2 1", x:"1/4", r:"lag", f:"sin(pi*x)"}
+  ];
+  function interpExample(){
+    var ex = INTERP_EXEMPLOS[interpExIdx % INTERP_EXEMPLOS.length]; interpExIdx++;
+    state.interpTable = ex.t; state.interpX = ex.x; state.interpRule = ex.r; state.interpFunc = ex.f;
+    syncInterp(); render(); saveLocal();
+  }
+
+  function renderInterp(){
+    var body = document.getElementById("stepsBody");
+    var lag = state.interpRule !== "sis";
+    document.getElementById("stepsHead").textContent = "PASSO A PASSO: INTERPOLAÇÃO " + (lag ? "DE LAGRANGE" : "POR SISTEMA LINEAR");
+    document.getElementById("matrixHead").textContent = "INTERPOLAÇÃO POLINOMIAL";
+    document.getElementById("matrixCaption").textContent = "";
+    lastComputation = null;
+    ["btnPdfScilab", "btnPreviewOne", "btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = true; });
+    var ph = document.getElementById("pdfHint"); if (ph) ph.textContent = "Digite pelo menos 2 pontos (x e f(x)) para habilitar o download.";
+    body.innerHTML = "";
+    function fail(msg){
+      var d = document.createElement("div"); d.className = "final-box";
+      d.innerHTML = "<h3>Não foi possível calcular</h3><div style='font-size:12.5px'></div>";
+      d.lastChild.textContent = msg; body.appendChild(d);
+    }
+    var run; try{ run = interpRunFor(state); }catch(e){ return fail(e.message || "Entrada inválida."); }
+    lastComputation = {method:"interp", run:run};
+    ["btnPdfScilab", "btnPreviewOne", "btnScilabCode"].forEach(function(id){ document.getElementById(id).disabled = false; });
+    var ph2 = document.getElementById("pdfHint"); if (ph2) ph2.textContent = "Entrada válida: Visualizar, Baixar PDF e Código Scilab (.sce) estão disponíveis.";
+
+    var sum = document.createElement("div"); sum.className = "bis-summary";
+    var tiles = [["Pontos", String(run.n + 1)], ["Grau do polinômio", String(run.deg)]];
+    if (run.xv) tiles.push(["p(" + qStr(run.xv) + ")", dec6(qNum(run.pval))]);
+    tiles.forEach(function(v){
+      var d = document.createElement("div"); d.className = "bis-stat";
+      var s = document.createElement("small"); s.textContent = v[0];
+      var b = document.createElement("strong"); b.textContent = v[1];
+      d.appendChild(s); d.appendChild(b); sum.appendChild(d);
+    });
+    body.appendChild(sum);
+
+    var w = document.createElement("div"); w.className = "bis-table-wrap";
+    var t = document.createElement("table"); t.className = "bis-table-grid"; t.style.minWidth = "0";
+    var hr = document.createElement("tr");
+    ["i", "xᵢ", "yᵢ = f(xᵢ)"].forEach(function(x){ var th = document.createElement("th"); th.textContent = x; hr.appendChild(th); });
+    t.appendChild(hr);
+    run.pts.forEach(function(p, i){
+      var tr = document.createElement("tr");
+      [String(i), qStr(p.x), qStr(p.y)].forEach(function(v){ var td = document.createElement("td"); td.textContent = v; tr.appendChild(td); });
+      t.appendChild(tr);
+    });
+    w.appendChild(t); body.appendChild(w);
+
+    interpSections(state, run).forEach(function(sec, k){
+      if (k === 0) return;   // "Dados" já aparece nos cartões e na tabela
+      var fb = document.createElement("div"); fb.className = "final-box"; fb.style.marginTop = "10px";
+      fb.innerHTML = "<h3></h3><div style='font-size:12.5px;white-space:pre-wrap;line-height:1.6;font-family:\"JetBrains Mono\",monospace'></div>";
+      fb.firstChild.textContent = sec.t; fb.lastChild.textContent = sec.l.join("\n"); body.appendChild(fb);
+    });
+  }
+
+  // ---- gráfico (reaproveita o modal do gráfico da Bisseção) ----
+  function interpGraphModel(st, run){
+    var xs = run.pts.map(function(p){ return qNum(p.x); });
+    if (run.xv) xs.push(qNum(run.xv));
+    var lo = Math.min.apply(null, xs), hi = Math.max.apply(null, xs);
+    var span = Math.max(hi - lo, 0.5 * Math.max(Math.abs(hi), Math.abs(lo), 1));
+    var xMin = lo - span * 0.15, xMax = hi + span * 0.15;
+    var cf = run.coefs.map(qNum);
+    function pf(x){ var r = 0, k; for (k = cf.length - 1; k >= 0; k--) r = r * x + cf[k]; return r; }
+    var curves = [{fn:pf, color:"ink", width:2.4}], legend = [{t:"line", c:"ink", l:"p(x) interpolador", a:"p(x)"}];
+    var fs = String(st.interpFunc || "").trim();
+    if (fs){
+      var f = null; try{ f = makeFunction(fs); }catch(e){ f = null; }
+      if (f){
+        curves.push({fn:function(x){ try{ return f(x); }catch(e){ return NaN; } }, color:"soft", dash:true, width:1.6});
+        legend.push({t:"line", c:"soft", l:"f(x) exata", a:"f(x)"});
+      }
+    }
+    var pts = run.pts.map(function(p){ return {x:qNum(p.x), y:qNum(p.y), c:"danger", r:5.5}; });
+    legend.push({t:"dot", c:"danger", l:"pontos dados", a:"pontos"});
+    if (run.xv){
+      pts.push({x:qNum(run.xv), y:qNum(run.pval), c:"brass", r:7});
+      legend.push({t:"dot", c:"brass", l:"p(" + qStr(run.xv) + ")", a:"p(x)"});
+    }
+    var ys = [], k;
+    curves.forEach(function(c){ for (k = 0; k <= 500; k++){ var y = c.fn(xMin + (xMax - xMin) * k / 500); if (isFinite(y)) ys.push(y); } });
+    pts.forEach(function(p){ ys.push(p.y); });
+    var yMin = Math.min.apply(null, ys), yMax = Math.max.apply(null, ys);
+    var yPad = Math.max(yMax - yMin, 1e-9) * 0.15; yMin -= yPad; yMax += yPad;
+    return {kind:"interp", interval:false, first:null, xMin:xMin, xMax:xMax, yMin:yMin, yMax:yMax,
+            curves:curves, segs:[], pts:pts, legend:legend, title:"Gráfico da interpolação polinomial", ylabel:"y"};
+  }
+  document.getElementById("btnInterpGraph").addEventListener("click", function(){
+    if (!isInterp(state.method) || !lastComputation || lastComputation.method !== "interp") return;
+    drawBisectionGraph({interpModel: interpGraphModel(state, lastComputation.run)});
+    document.getElementById("bisGraphModal").classList.add("open");
+  });
+
+  // ---- código Scilab (.sce) ----
+  var INTERP_SCE_HELP = String.raw`function s = polstr(c)
+    // monta "c0 + c1*x + c2*x^2 ..." a partir dos coeficientes (ordem crescente)
+    s = "";
+    for k = length(c):-1:1
+        if abs(c(k)) < 1e-12 then
+            continue
+        end
+        t = fnum8(abs(c(k)));
+        if k > 1 then
+            t = t + "*x";
+            if k > 2 then
+                t = t + "^" + string(k-1);
+            end
+        end
+        if s == "" then
+            if c(k) < 0 then
+                s = "-" + t;
+            else
+                s = t;
+            end
+        else
+            if c(k) < 0 then
+                s = s + " - " + t;
+            else
+                s = s + " + " + t;
+            end
+        end
+    end
+    if s == "" then
+        s = "0";
+    end
+endfunction
+
+`;
+  function buildScilabCodeInterp(){
+    if (!lastComputation || lastComputation.method !== "interp") return "";
+    var st = state, run = lastComputation.run, pts = run.pts, lag = run.rule === "lag";
+    var code = SCE_HEADER + SCE_HELP_BASE + SCE_HELP_FNUM8 + INTERP_SCE_HELP;
+    code += "x = [" + pts.map(function(p){ return fmtScilab(qNum(p.x)); }).join(" ") + "];\n";
+    code += "y = [" + pts.map(function(p){ return fmtScilab(qNum(p.y)); }).join(" ") + "];\n";
+    if (run.xv) code += "xv = " + fmtScilab(qNum(run.xv)) + ";\n";
+    if (run.fexact !== null) code += "function fy = f(x)\n    fy = " + bisExprToScilab(st.interpFunc) + ";\nendfunction\n";
+    code += "n = length(x) - 1;   // grau máximo do polinômio\n\n";
+    code += sceCabecalho();
+    code += sceEscreve("// Dados");
+    code += String.raw`for i = 1:n+1
+    escreve(msprintf("x%d = %s     y%d = %s", i-1, fnum8(x(i)), i-1, fnum8(y(i))));
+end
+escreve(msprintf("%d pontos  =>  grau do polinômio <= %d", n+1, n));
+`;
+    code += sceEscreve("");
+    if (lag){
+      code += sceEscreve("// Polinômios de Lagrange");
+      code += String.raw`P = 0;
+for i = 1:n+1
+    r = x;
+    r(i) = [];                              // todos os x, menos o xi
+    den = prod(x(i) - r);
+    Li = poly(r, "t", "roots") * (1/den);   // Li(x) = prod(x - xj) / prod(xi - xj)
+    escreve(msprintf("L%d(x) = %s", i-1, polstr(coeff(Li))));
+    P = P + y(i)*Li;
+end
+c = coeff(P);
+c = [c, zeros(1, n + 1 - length(c))];
+`;
+    } else {
+      code += sceEscreve("// Sistema linear: p(x) = a0 + a1*x + ... + an*x^n");
+      code += String.raw`V = zeros(n+1, n+1);
+for j = 1:n+1
+    V(:, j) = x(:).^(j-1);
+end
+escreve("Matriz aumentada [V | y]:");
+for i = 1:n+1
+    linha = "[";
+    for j = 1:n+1
+        linha = linha + " " + fnum8(V(i, j));
+    end
+    escreve(linha + " | " + fnum8(y(i)) + " ]");
+end
+a = V \ y(:);
+c = a';
+for k = 1:n+1
+    escreve(msprintf("a%d = %s", k-1, fnum8(c(k))));
+end
+`;
+    }
+    code += sceEscreve("");
+    code += "escreve(\"p(x) = \" + polstr(c));\n";
+    if (run.xv){
+      code += String.raw`P = poly(c, "t", "coeff");
+pv = horner(P, xv);
+escreve("");
+escreve(msprintf("p(%s) = %s", fnum8(xv), fnum8(pv)));
+`;
+      if (run.fexact !== null){
+        code += String.raw`fv = f(xv);
+escreve(msprintf("f(%s) = %s", fnum8(xv), fnum8(fv)));
+escreve("Erro absoluto = |f(x) - p(x)| = " + fnum8(abs(fv - pv)));
+`;
+        if (run.fexact !== 0) code += "if fv <> 0 then\n    escreve(\"Erro relativo = \" + msprintf(\"%.4f\", abs(fv - pv) / abs(fv) * 100) + \" %\");\nend\n";
+      }
+    }
+    return code;
+  }
+
   function setMethod(m){
     var prev = state.method;
     if (prev === "gauss" && m !== "gauss" && state.A && state.A.length) converterParaQuadrado();
@@ -3522,7 +4161,7 @@ if rhoOk then
     document.getElementById("colsField").style.display = isRoot(m) ? "none" : "flex";
     document.getElementById("colsLabel").textContent = m === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("dimsPanel").classList.toggle("dims-full", isRoot(m));
-    syncInteg();
+    syncInteg(); syncInterp();
     syncDimsHint(m); syncRootFields();
     if (m !== "gauss"){ document.getElementById("colsVal").textContent = state.jn; }
     else { document.getElementById("colsVal").textContent = state.cols; document.getElementById("rowsVal").textContent = state.rows; }
@@ -3583,6 +4222,7 @@ if rhoOk then
   });
 
   document.getElementById("btnExample").addEventListener("click", function(){
+    if (isInterp(state.method)){ interpExample(); return; }
     if (state.method === "gauss"){
       state.rows = 3; state.cols = 3;
       state.A = [[2,-4,4,8],[-1,1,1,0],[1,-2,3,3]];
@@ -3630,6 +4270,10 @@ if rhoOk then
   });
 
   document.getElementById("btnClear").addEventListener("click", function(){
+    if (isInterp(state.method)){
+      state.interpTable = ""; state.interpX = ""; state.interpFunc = "";
+      syncInterp(); render(); saveLocal(); return;
+    }
     if (isRoot(state.method)){
       state.rootPhi = ""; state.rootX0 = null; pushRootDom();
       state.bisFunction = ""; state.bisA = null; state.bisB = null;
@@ -4252,7 +4896,15 @@ if rhoOk then
       line("// "+questionTitle);
       blank(7);
 
-      if (isInteg(comp.method)){
+      if (isInterp(comp.method)){
+        interpTextLines(st, comp.run).forEach(function(l){ line(l); });
+        if (st.interpChartOn){
+          blank(10);
+          line("// Gráfico do polinômio interpolador e dos pontos");
+          ensureSpace(265);
+          y = pdfRootGraph(doc, interpGraphModel(st, comp.run), margin, y, pageW-margin*2, 210);
+        }
+      } else if (isInteg(comp.method)){
         integTextLines(st, comp.run).forEach(function(l){ line(l); });
       } else if (isRoot(comp.method)){
         var br = comp.run;
@@ -4465,7 +5117,10 @@ if rhoOk then
       push("// "+questionTitle);
       blankLine();
 
-      if (isInteg(comp.method)){
+      if (isInterp(comp.method)){
+        interpTextLines(st, comp.run).forEach(function(l){ push(l); });
+        if (st.interpChartOn) push("// Gráfico (com escala e legenda): incluído no PDF.");
+      } else if (isInteg(comp.method)){
         integTextLines(st, comp.run).forEach(function(l){ push(l); });
       } else if (isRoot(comp.method)){
         var br = comp.run;
@@ -4784,6 +5439,7 @@ if rhoOk then
   function computeFor(st){
     // A bisseção não usa matriz A/b: recalculamos diretamente a partir da
     // função, intervalo e critério que foram salvos junto com a questão.
+    if (isInterp(st.method)) return {method:"interp", run: interpRunFor(st)};
     if (isInteg(st.method)) return {method:"integracao", run: integRunFor(st)};
     if (isRoot(st.method)) return {method: st.method, run: rootRunFor(st)};
     if (st.method === "lu") return {method:"lu", run: luSteps(st.A, st.b)};
@@ -4795,7 +5451,7 @@ if rhoOk then
   }
 
   function savedTitle(st){ return st.headerQuestion ? ("Questão " + st.headerQuestion) : "Questão"; }
-  function savedMethodName(st){ return st.method === "integracao" ? "Integração Numérica" : st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : st.method === "falsapos" ? "Posição Falsa" : st.method === "pontofixo" ? "Ponto Fixo" : st.method === "newton" ? "Newton" : "Jacobi"))); }
+  function savedMethodName(st){ return st.method === "interp" ? "Interpolação" : st.method === "integracao" ? "Integração Numérica" : st.method === "gauss" ? "Escalonamento" : (st.method === "lu" ? "Fatoração LU" : (st.method === "seidel" ? "Gauss-Seidel" : (st.method === "bissecao" ? "Bisseção" : st.method === "falsapos" ? "Posição Falsa" : st.method === "pontofixo" ? "Ponto Fixo" : st.method === "newton" ? "Newton" : "Jacobi"))); }
 
   function renderSaved(){
     var panel = document.getElementById("savedPanel");
@@ -5910,6 +6566,7 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
 
   function buildScilabCode(){
     if (!lastComputation) return "";
+    if (state.method === "interp") return buildScilabCodeInterp();
     if (state.method === "integracao") return buildScilabCodeInteg();
     if (state.method === "bissecao") return buildScilabCodeBissecao();
     if (state.method === "falsapos" || state.method === "pontofixo" || state.method === "newton") return buildScilabCodeRaiz();
@@ -6178,7 +6835,7 @@ escreve("// PDF salvo em: " + nomeArqGrafico + ".pdf");
     document.getElementById("rowsField").style.display = state.method === "gauss" ? "flex" : "none";
     document.getElementById("colsField").style.display = isRoot(state.method) ? "none" : "flex";
     document.getElementById("dimsPanel").classList.toggle("dims-full", isRoot(state.method));
-    syncInteg();
+    syncInteg(); syncInterp();
     syncDimsHint(state.method);
     document.getElementById("colsLabel").textContent = state.method === "gauss" ? "Colunas (incógnitas)" : "Tamanho (n × n)";
     document.getElementById("rowsVal").textContent = state.rows;
